@@ -287,8 +287,8 @@ export class Eth2Gossipsub extends GossipSub {
   private onGossipsubMessage(event: GossipsubEvents["gossipsub:message"]): void {
     const {propagationSource, msgId, msg} = event.detail;
 
-    // Also validates that the topicStr is known
-    const topic = this.gossipTopicCache.getTopic(msg.topic);
+    // this validates that the topicStr is known
+    this.gossipTopicCache.getTopic(msg.topic);
 
     // Get seenTimestamp before adding the message to the queue or add async delays
     const seenTimestampSec = Date.now() / 1000;
@@ -298,7 +298,8 @@ export class Eth2Gossipsub extends GossipSub {
     // See https://github.com/ChainSafe/lodestar/issues/5604
     callInNextEventLoop(() => {
       this.events.emit(NetworkEvent.pendingGossipsubMessage, {
-        topic,
+        // send as minimal data as possible, network processor has its own topic cache to reconstruct the topic
+        topic: msg.topic,
         msg,
         msgId,
         // Hot path, use cached .toString() version

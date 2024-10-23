@@ -58,7 +58,7 @@ export class NetworkEventBus extends (EventEmitter as {new (): INetworkEventBus}
 
 // the interface to exchange gossipsub messages from worker to main thread
 export type ExchangeGossipsubMessage = {
-  topic: GossipTopic;
+  topic: string;
   msg: Message;
   msgId: string;
   propagationSource: PeerIdStr;

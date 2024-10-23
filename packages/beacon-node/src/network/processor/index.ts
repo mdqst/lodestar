@@ -24,6 +24,7 @@ import {PendingGossipsubMessage} from "./types.js";
 import {ValidatorFnsModules, GossipHandlerOpts, getGossipHandlers} from "./gossipHandlers.js";
 import {createExtractBlockSlotRootFns} from "./extractSlotRootFns.js";
 import {ValidatorFnModules, getGossipValidatorBatchFn, getGossipValidatorFn} from "./gossipValidatorFn.js";
+import {GossipTopicCache} from "../gossip/topic.js";
 
 export * from "./types.js";
 
@@ -153,6 +154,8 @@ export class NetworkProcessor {
   private readonly gossipValidatorFn: GossipValidatorFn;
   private readonly gossipValidatorBatchFn: GossipValidatorBatchFn;
   private readonly gossipQueues: ReturnType<typeof createGossipQueues>;
+  // Internal caches
+  private readonly gossipTopicCache: GossipTopicCache;
   private readonly gossipTopicConcurrency: {[K in GossipType]: number};
   private readonly extractBlockSlotRootFns = createExtractBlockSlotRootFns();
   // we may not receive the block for Attestation and SignedAggregateAndProof messages, in that case PendingGossipsubMessage needs
@@ -173,6 +176,7 @@ export class NetworkProcessor {
     this.logger = logger;
     this.events = events;
     this.gossipQueues = createGossipQueues();
+    this.gossipTopicCache = new GossipTopicCache(modules.config);
     this.gossipTopicConcurrency = mapValues(this.gossipQueues, () => 0);
     this.gossipValidatorFn = getGossipValidatorFn(modules.gossipHandlers ?? getGossipHandlers(modules, opts), modules);
     this.gossipValidatorBatchFn = getGossipValidatorBatchFn(
@@ -243,7 +247,9 @@ export class NetworkProcessor {
   }
 
   private onPendingGossipsubMessage(exchangeMessage: ExchangeGossipsubMessage): void {
-    const message = exchangeMessage as PendingGossipsubMessage;
+    // only topic type is different between 2 types but we can convert it soon to avoid an object allocation
+    const message = exchangeMessage as unknown as PendingGossipsubMessage;
+    message.topic = this.gossipTopicCache.getTopic(exchangeMessage.topic);
     const topicType = message.topic.type;
     const extractBlockSlotRootFn = this.extractBlockSlotRootFns[topicType];
     // check block root of Attestation and SignedAggregateAndProof messages
