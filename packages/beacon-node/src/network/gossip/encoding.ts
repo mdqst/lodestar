@@ -1,6 +1,6 @@
 import {compress, uncompress} from "snappyjs";
 import xxhashFactory from "xxhash-wasm";
-import {Message} from "@libp2p/interface";
+import {Message, TopicValidatorResult} from "@libp2p/interface";
 import {digest} from "@chainsafe/as-sha256";
 import {RPC} from "@chainsafe/libp2p-gossipsub/message";
 import {DataTransform} from "@chainsafe/libp2p-gossipsub/types";
@@ -108,4 +108,13 @@ export class DataTransformSnappy implements DataTransform {
     // No need to parse topic, everything is snappy compressed
     return compress(data);
   }
+}
+
+const topicValidatorResults = Object.values(TopicValidatorResult);
+export function getTopicValidatorResult(index: number): TopicValidatorResult {
+  return topicValidatorResults[index];
+}
+
+export function getTopicValidatorResultIndex(result: TopicValidatorResult): number {
+  return topicValidatorResults.indexOf(result);
 }

@@ -15,7 +15,7 @@ import {NetworkEvent, NetworkEventBus, NetworkEventData} from "../events.js";
 import {callInNextEventLoop} from "../../util/eventLoop.js";
 import {GossipTopic, GossipType} from "./interface.js";
 import {GossipTopicCache, stringifyGossipTopic, getCoreTopicsAtFork} from "./topic.js";
-import {DataTransformSnappy, fastMsgIdFn, msgIdFn, msgIdToStrFn} from "./encoding.js";
+import {DataTransformSnappy, fastMsgIdFn, getTopicValidatorResult, msgIdFn, msgIdToStrFn} from "./encoding.js";
 import {createEth2GossipsubMetrics, Eth2GossipsubMetrics} from "./metrics.js";
 
 import {
@@ -314,7 +314,7 @@ export class Eth2Gossipsub extends GossipSub {
     // Without this we'll have huge event loop lag
     // See https://github.com/ChainSafe/lodestar/issues/5604
     callInNextEventLoop(() => {
-      this.reportMessageValidationResult(data.msgId, data.propagationSource, data.acceptance);
+      this.reportMessageValidationResult(data.msgId, data.propagationSource, getTopicValidatorResult(data.acceptance));
     });
   }
 }

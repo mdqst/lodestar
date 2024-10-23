@@ -1,5 +1,5 @@
 import {EventEmitter} from "node:events";
-import {PeerId, TopicValidatorResult} from "@libp2p/interface";
+import {PeerId} from "@libp2p/interface";
 import {phase0, RootHex} from "@lodestar/types";
 import {BlockInput, NullBlockInput} from "../chain/blocks/types.js";
 import {StrictEventEmitterSingleArg} from "../util/strictEvents.js";
@@ -33,11 +33,7 @@ export type NetworkEventData = {
   [NetworkEvent.unknownBlock]: {rootHex: RootHex; peer?: PeerIdStr};
   [NetworkEvent.unknownBlockInput]: {blockInput: BlockInput | NullBlockInput; peer?: PeerIdStr};
   [NetworkEvent.pendingGossipsubMessage]: ExchangeGossipsubMessage;
-  [NetworkEvent.gossipMessageValidationResult]: {
-    msgId: string;
-    propagationSource: PeerIdStr;
-    acceptance: TopicValidatorResult;
-  };
+  [NetworkEvent.gossipMessageValidationResult]: ExchangeGossipValidationResult;
 };
 
 export const networkEventDirection: Record<NetworkEvent, EventDirection> = {
@@ -55,7 +51,9 @@ export type INetworkEventBus = StrictEventEmitterSingleArg<NetworkEventData>;
 
 export class NetworkEventBus extends (EventEmitter as {new (): INetworkEventBus}) {}
 
-// the interface to exchange gossipsub messages from worker to main thread
+/**
+ * The interface to exchange gossip messages from worker to main thread
+ */
 export type ExchangeGossipsubMessage = {
   topic: string;
   msgData: Uint8Array;
@@ -63,3 +61,14 @@ export type ExchangeGossipsubMessage = {
   propagationSource: PeerIdStr;
   seenTimestampSec: number;
 };
+
+/**
+ * The interface to exchange gossip validation results from main thread to worker
+ */
+export type ExchangeGossipValidationResult = {
+  msgId: string;
+  propagationSource: PeerIdStr;
+  // acceptance is index to TopicValidatorResult
+  // we use number instead of string to reduce structural clone cost
+  acceptance: number;
+}

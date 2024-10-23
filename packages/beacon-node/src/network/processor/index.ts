@@ -25,6 +25,7 @@ import {ValidatorFnsModules, GossipHandlerOpts, getGossipHandlers} from "./gossi
 import {createExtractBlockSlotRootFns} from "./extractSlotRootFns.js";
 import {ValidatorFnModules, getGossipValidatorBatchFn, getGossipValidatorFn} from "./gossipValidatorFn.js";
 import {GossipTopicCache} from "../gossip/topic.js";
+import {getTopicValidatorResultIndex} from "../gossip/encoding.js";
 
 export * from "./types.js";
 
@@ -466,7 +467,7 @@ export class NetworkProcessor {
           this.events.emit(NetworkEvent.gossipMessageValidationResult, {
             msgId: msg.msgId,
             propagationSource: msg.propagationSource,
-            acceptance: acceptanceArr[i],
+            acceptance: getTopicValidatorResultIndex(acceptanceArr[i]),
           });
         });
       }
@@ -475,7 +476,7 @@ export class NetworkProcessor {
         this.events.emit(NetworkEvent.gossipMessageValidationResult, {
           msgId: messageOrArray.msgId,
           propagationSource: messageOrArray.propagationSource,
-          acceptance: acceptanceArr[0],
+          acceptance: getTopicValidatorResultIndex(acceptanceArr[0]),
         });
       });
     }
