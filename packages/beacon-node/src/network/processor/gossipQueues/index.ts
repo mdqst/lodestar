@@ -73,7 +73,7 @@ const indexedGossipQueueOpts: {
     maxLength: 24576,
     indexFn: (item: PendingGossipsubMessage) => {
       // Note indexFn is fork agnostic despite changes introduced in Electra
-      return getGossipAttestationIndex(item.msg.data);
+      return getGossipAttestationIndex(item.msgData);
     },
     minChunkSize: MIN_SIGNATURE_SETS_TO_BATCH_VERIFY,
     maxChunkSize: MAX_GOSSIP_ATTESTATION_BATCH_SIZE,

@@ -1,4 +1,3 @@
-import {Message} from "@libp2p/interface";
 import {Slot, SlotOptionalRoot} from "@lodestar/types";
 import {GossipTopic, GossipType} from "../gossip/index.js";
 import {PeerIdStr} from "../../util/peerId.js";
@@ -9,7 +8,7 @@ export type GossipAttestationsWork = {
 
 export type PendingGossipsubMessage = {
   topic: GossipTopic;
-  msg: Message;
+  msgData: Uint8Array;
   // only available for beacon_attestation and aggregate_and_proof
   msgSlot?: Slot;
   msgId: string;

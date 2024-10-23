@@ -36,7 +36,7 @@ export function getGossipValidatorBatchFn(
       const results = await (gossipHandlers[type] as BatchGossipHandlerFn)(
         messageInfos.map((messageInfo) => ({
           gossipData: {
-            serializedData: messageInfo.msg.data,
+            serializedData: messageInfo.msgData,
             msgSlot: messageInfo.msgSlot,
             indexed: messageInfo.indexed,
           },
@@ -97,12 +97,12 @@ export function getGossipValidatorBatchFn(
 export function getGossipValidatorFn(gossipHandlers: GossipHandlers, modules: ValidatorFnModules): GossipValidatorFn {
   const {logger, metrics} = modules;
 
-  return async function gossipValidatorFn({topic, msg, propagationSource, seenTimestampSec, msgSlot}) {
+  return async function gossipValidatorFn({topic, msgData, propagationSource, seenTimestampSec, msgSlot}) {
     const type = topic.type;
 
     try {
       await (gossipHandlers[type] as GossipHandlerFn)({
-        gossipData: {serializedData: msg.data, msgSlot},
+        gossipData: {serializedData: msgData, msgSlot},
         topic,
         peerIdStr: propagationSource,
         seenTimestampSec,

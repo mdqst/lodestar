@@ -142,7 +142,7 @@ export type GossipModules = {
  */
 export type GossipMessageInfo = {
   topic: GossipTopic;
-  msg: Message;
+  msgData: Uint8Array;
   propagationSource: PeerIdStr;
   seenTimestampSec: number;
   msgSlot: Slot | null;

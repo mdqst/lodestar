@@ -300,7 +300,7 @@ export class Eth2Gossipsub extends GossipSub {
       this.events.emit(NetworkEvent.pendingGossipsubMessage, {
         // send as minimal data as possible, network processor has its own topic cache to reconstruct the topic
         topic: msg.topic,
-        msg,
+        msgData: msg.data,
         msgId,
         // Hot path, use cached .toString() version
         propagationSource: propagationSource.toString(),

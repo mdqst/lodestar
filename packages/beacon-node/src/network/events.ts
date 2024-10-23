@@ -1,12 +1,11 @@
 import {EventEmitter} from "node:events";
-import {Message, PeerId, TopicValidatorResult} from "@libp2p/interface";
-import {phase0, RootHex, Slot} from "@lodestar/types";
+import {PeerId, TopicValidatorResult} from "@libp2p/interface";
+import {phase0, RootHex} from "@lodestar/types";
 import {BlockInput, NullBlockInput} from "../chain/blocks/types.js";
 import {StrictEventEmitterSingleArg} from "../util/strictEvents.js";
 import {PeerIdStr} from "../util/peerId.js";
 import {EventDirection} from "../util/workerEvents.js";
 import {RequestTypedContainer} from "./reqresp/ReqRespBeaconNode.js";
-import {GossipTopic} from "./gossip/interface.js";
 
 export enum NetworkEvent {
   /** A relevant peer has connected or has been re-STATUS'd */
@@ -59,7 +58,7 @@ export class NetworkEventBus extends (EventEmitter as {new (): INetworkEventBus}
 // the interface to exchange gossipsub messages from worker to main thread
 export type ExchangeGossipsubMessage = {
   topic: string;
-  msg: Message;
+  msgData: Uint8Array;
   msgId: string;
   propagationSource: PeerIdStr;
   seenTimestampSec: number;
