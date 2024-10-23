@@ -9,7 +9,7 @@ import {GossipErrorCode} from "../../chain/errors/gossipValidation.js";
 import {Metrics} from "../../metrics/metrics.js";
 import {IBeaconDb} from "../../db/interface.js";
 import {ClockEvent} from "../../util/clock.js";
-import {NetworkEvent, NetworkEventBus} from "../events.js";
+import {ExchangeGossipsubMessage, NetworkEvent, NetworkEventBus} from "../events.js";
 import {
   GossipHandlers,
   GossipMessageInfo,
@@ -242,7 +242,8 @@ export class NetworkProcessor {
     this.events.emit(NetworkEvent.unknownBlock, {rootHex: root, peer});
   }
 
-  private onPendingGossipsubMessage(message: PendingGossipsubMessage): void {
+  private onPendingGossipsubMessage(exchangeMessage: ExchangeGossipsubMessage): void {
+    const message = exchangeMessage as PendingGossipsubMessage;
     const topicType = message.topic.type;
     const extractBlockSlotRootFn = this.extractBlockSlotRootFns[topicType];
     // check block root of Attestation and SignedAggregateAndProof messages

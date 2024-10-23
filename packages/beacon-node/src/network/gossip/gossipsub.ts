@@ -304,7 +304,6 @@ export class Eth2Gossipsub extends GossipSub {
         // Hot path, use cached .toString() version
         propagationSource: propagationSource.toString(),
         seenTimestampSec,
-        startProcessUnixSec: null,
       });
     });
   }

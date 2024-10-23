@@ -1,12 +1,12 @@
 import {EventEmitter} from "node:events";
-import {PeerId, TopicValidatorResult} from "@libp2p/interface";
-import {phase0, RootHex} from "@lodestar/types";
+import {Message, PeerId, TopicValidatorResult} from "@libp2p/interface";
+import {phase0, RootHex, Slot} from "@lodestar/types";
 import {BlockInput, NullBlockInput} from "../chain/blocks/types.js";
 import {StrictEventEmitterSingleArg} from "../util/strictEvents.js";
 import {PeerIdStr} from "../util/peerId.js";
 import {EventDirection} from "../util/workerEvents.js";
 import {RequestTypedContainer} from "./reqresp/ReqRespBeaconNode.js";
-import {PendingGossipsubMessage} from "./processor/types.js";
+import {GossipTopic} from "./gossip/interface.js";
 
 export enum NetworkEvent {
   /** A relevant peer has connected or has been re-STATUS'd */
@@ -33,7 +33,7 @@ export type NetworkEventData = {
   [NetworkEvent.unknownBlockParent]: {blockInput: BlockInput; peer: PeerIdStr};
   [NetworkEvent.unknownBlock]: {rootHex: RootHex; peer?: PeerIdStr};
   [NetworkEvent.unknownBlockInput]: {blockInput: BlockInput | NullBlockInput; peer?: PeerIdStr};
-  [NetworkEvent.pendingGossipsubMessage]: PendingGossipsubMessage;
+  [NetworkEvent.pendingGossipsubMessage]: ExchangeGossipsubMessage;
   [NetworkEvent.gossipMessageValidationResult]: {
     msgId: string;
     propagationSource: PeerIdStr;
@@ -55,3 +55,12 @@ export const networkEventDirection: Record<NetworkEvent, EventDirection> = {
 export type INetworkEventBus = StrictEventEmitterSingleArg<NetworkEventData>;
 
 export class NetworkEventBus extends (EventEmitter as {new (): INetworkEventBus}) {}
+
+// the interface to exchange gossipsub messages from worker to main thread
+export type ExchangeGossipsubMessage = {
+  topic: GossipTopic;
+  msg: Message;
+  msgId: string;
+  propagationSource: PeerIdStr;
+  seenTimestampSec: number;
+};
