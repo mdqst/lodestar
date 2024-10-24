@@ -1,5 +1,5 @@
-import {ssz, Attestation, sszTypesFor} from "@lodestar/types";
-import {ForkDigestContext} from "@lodestar/config";
+import {ssz, Attestation, sszTypesFor, Epoch} from "@lodestar/types";
+import {BeaconConfig, ForkDigestContext} from "@lodestar/config";
 import {
   ATTESTATION_SUBNET_COUNT,
   ForkName,
@@ -17,10 +17,36 @@ export interface IGossipTopicCache {
   getTopic(topicStr: string): GossipTopic;
 }
 
-export class GossipTopicCache implements IGossipTopicCache {
-  private topicsByTopicStr = new Map<string, Required<GossipTopic>>();
+export type TopicIndex = number;
 
-  constructor(private readonly forkDigestContext: ForkDigestContext) {}
+export class GossipTopicCache implements IGossipTopicCache {
+  private readonly forkDigestContext: ForkDigestContext;
+  private topicsByTopicStr = new Map<string, Required<GossipTopic>>();
+  /**
+   * Maps all possible topics at all possible forks to an index to save bandwidth passing topics through thread boundaries
+   */
+  private topicToIndex = new Map<string, TopicIndex>();
+  private indexToTopic = new Map<TopicIndex, string>();
+  private nextTopicIndex = 0;
+
+  constructor(config: BeaconConfig, currentEpoch: Epoch) {
+    this.forkDigestContext = config;
+    const allForks = config.forksAscendingEpochOrder;
+    const currentForkSeq = config.getForkSeq(currentEpoch);
+    const cachedForks = allForks.filter((fork) => fork.seq >= currentForkSeq).map((fork) => fork.name);
+    // should provide the current fork and next fork if possible
+    if (cachedForks.length === 0) {
+      throw Error("At least one fork is required");
+    }
+
+    for (const fork of cachedForks) {
+      for (const topic of getCoreTopicsAtFork(fork, {subscribeAllSubnets: true, disableLightClientServer: false})) {
+        const topicWithFork = {...topic, fork};
+        const topicStr = stringifyGossipTopic(this.forkDigestContext, topicWithFork);
+        this.setTopic(topicStr, topicWithFork);
+      }
+    }
+  }
 
   /** Returns cached GossipTopic, otherwise attempts to parse it from the str */
   getTopic(topicStr: string): GossipTopic {
@@ -33,14 +59,35 @@ export class GossipTopicCache implements IGossipTopicCache {
     return topic;
   }
 
+  getTopicIndex(topicStr: string): TopicIndex {
+    const index = this.topicToIndex.get(topicStr);
+    if (index === undefined) {
+      throw Error(`Unknown topic ${topicStr}`);
+    }
+
+    return index;
+  }
+
+  getTopicByIndex(index: TopicIndex): GossipTopic {
+    const topicStr = this.indexToTopic.get(index);
+    if (topicStr === undefined) {
+      throw Error(`Unknown topic index ${index}`);
+    }
+
+    return this.getTopic(topicStr);
+  }
+
   /** Returns cached GossipTopic, otherwise returns undefined */
   getKnownTopic(topicStr: string): GossipTopic | undefined {
     return this.topicsByTopicStr.get(topicStr);
   }
 
-  setTopic(topicStr: string, topic: GossipTopic): void {
+  private setTopic(topicStr: string, topic: GossipTopic): void {
     if (!this.topicsByTopicStr.has(topicStr)) {
       this.topicsByTopicStr.set(topicStr, {encoding: DEFAULT_ENCODING, ...topic});
+      this.topicToIndex.set(topicStr, this.nextTopicIndex);
+      this.indexToTopic.set(this.nextTopicIndex, topicStr);
+      this.nextTopicIndex++;
     }
   }
 }

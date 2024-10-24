@@ -26,6 +26,7 @@ import {createExtractBlockSlotRootFns} from "./extractSlotRootFns.js";
 import {ValidatorFnModules, getGossipValidatorBatchFn, getGossipValidatorFn} from "./gossipValidatorFn.js";
 import {GossipTopicCache} from "../gossip/topic.js";
 import {getTopicValidatorResultIndex} from "../gossip/encoding.js";
+import type {PeerIndex} from "../gossip/gossipsub.js";
 
 export * from "./types.js";
 
@@ -156,8 +157,8 @@ export class NetworkProcessor {
   private readonly gossipValidatorBatchFn: GossipValidatorBatchFn;
   private readonly gossipQueues: ReturnType<typeof createGossipQueues>;
   // Internal caches
-  private readonly peerIdToIndex = new Map<PeerIdStr, number>();
-  private readonly indexToPeerId = new Map<number, PeerIdStr>();
+  private readonly peerIdToIndex = new Map<PeerIdStr, PeerIndex>();
+  private readonly indexToPeerId = new Map<PeerIndex, PeerIdStr>();
   private readonly gossipTopicCache: GossipTopicCache;
   private readonly gossipTopicConcurrency: {[K in GossipType]: number};
   private readonly extractBlockSlotRootFns = createExtractBlockSlotRootFns();
@@ -179,7 +180,7 @@ export class NetworkProcessor {
     this.logger = logger;
     this.events = events;
     this.gossipQueues = createGossipQueues();
-    this.gossipTopicCache = new GossipTopicCache(modules.config);
+    this.gossipTopicCache = new GossipTopicCache(modules.config, this.chain.clock.currentEpoch);
     this.gossipTopicConcurrency = mapValues(this.gossipQueues, () => 0);
     this.gossipValidatorFn = getGossipValidatorFn(modules.gossipHandlers ?? getGossipHandlers(modules, opts), modules);
     this.gossipValidatorBatchFn = getGossipValidatorBatchFn(
@@ -267,11 +268,14 @@ export class NetworkProcessor {
   private onPendingGossipsubMessage(exchangeMessage: ExchangeGossipsubMessage): void {
     // some properties are different between 2 types but we overwrite them right away
     const message = exchangeMessage as unknown as PendingGossipsubMessage;
-    message.topic = this.gossipTopicCache.getTopic(exchangeMessage.topic);
+    message.topic = this.gossipTopicCache.getTopicByIndex(exchangeMessage.topic);
     const propagationSource = this.indexToPeerId.get(exchangeMessage.propagationSource);
     if (!propagationSource) {
       this.metrics?.networkProcessor.unknownPeerIndex.inc();
-      this.logger.warn("Received gossip message from unknown peer", {peerIndex: exchangeMessage.propagationSource, topic: exchangeMessage.topic});
+      this.logger.warn("Received gossip message from unknown peer", {
+        peerIndex: exchangeMessage.propagationSource,
+        topic: exchangeMessage.topic,
+      });
       return;
     }
     message.propagationSource = propagationSource;

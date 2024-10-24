@@ -6,6 +6,8 @@ import {StrictEventEmitterSingleArg} from "../util/strictEvents.js";
 import {PeerIdStr} from "../util/peerId.js";
 import {EventDirection} from "../util/workerEvents.js";
 import {RequestTypedContainer} from "./reqresp/ReqRespBeaconNode.js";
+import {TopicIndex} from "./gossip/topic.js";
+import {PeerIndex} from "./gossip/index.js";
 
 export enum NetworkEvent {
   /** A relevant peer has connected or has been re-STATUS'd */
@@ -56,7 +58,7 @@ export class NetworkEventBus extends (EventEmitter as {new (): INetworkEventBus}
 
 export type ExchangePeerIdIndex = {
   peerId: PeerIdStr;
-  peerIndex: number;
+  peerIndex: PeerIndex;
 };
 
 /**
@@ -64,10 +66,10 @@ export type ExchangePeerIdIndex = {
  * TODO: make names shorter
  */
 export type ExchangeGossipsubMessage = {
-  topic: string;
+  topic: TopicIndex;
   msgData: Uint8Array;
   msgId: string;
-  propagationSource: number;
+  propagationSource: PeerIndex;
   seenTimestampSec: number;
 };
 
@@ -76,8 +78,8 @@ export type ExchangeGossipsubMessage = {
  */
 export type ExchangeGossipValidationResult = {
   msgId: string;
-  propagationSource: number;
+  propagationSource: PeerIndex;
   // acceptance is index to TopicValidatorResult
   // we use number instead of string to reduce structural clone cost
   acceptance: number;
-}
+};

@@ -46,6 +46,7 @@ export type Eth2GossipsubModules = {
   eth2Context: Eth2Context;
   peersData: PeersData;
   events: NetworkEventBus;
+  gossipTopicCache: GossipTopicCache;
 };
 
 export type Eth2GossipsubOpts = {
@@ -58,6 +59,11 @@ export type Eth2GossipsubOpts = {
   skipParamsLog?: boolean;
   disableLightClientServer?: boolean;
 };
+
+/**
+ * A unique identifier for peer to be used to save bandwidth passing messages through thread boundaries.
+ */
+export type PeerIndex = number;
 
 /**
  * Wrapper around js-libp2p-gossipsub with the following extensions:
@@ -82,18 +88,17 @@ export class Eth2Gossipsub extends GossipSub {
 
   // Internal caches
   private readonly gossipTopicCache: GossipTopicCache;
-  private readonly peerIdToIndex = new Map<PeerIdStr, number>();
-  private readonly indexToPeerId = new Map<number, PeerIdStr>();
+  private readonly peerIdToIndex = new Map<PeerIdStr, PeerIndex>();
+  private readonly indexToPeerId = new Map<PeerIndex, PeerIdStr>();
   // TODO: give a reasonable max number, reset to 0
   // for experiments, we keep increasing this number and ignore collisions
   private peerNextIndex = 0;
 
   constructor(opts: Eth2GossipsubOpts, modules: Eth2GossipsubModules) {
     const {allowPublishToZeroPeers, gossipsubD, gossipsubDLow, gossipsubDHigh} = opts;
-    const gossipTopicCache = new GossipTopicCache(modules.config);
 
     const scoreParams = computeGossipPeerScoreParams(modules);
-    const {config, logger, metricsRegister, peersData, events} = modules;
+    const {config, logger, metricsRegister, peersData, events, gossipTopicCache} = modules;
 
     // Gossipsub parameters defined here:
     // https://github.com/ethereum/consensus-specs/blob/v1.1.10/specs/phase0/p2p-interface.md#the-gossip-domain-gossipsub
@@ -174,10 +179,9 @@ export class Eth2Gossipsub extends GossipSub {
    */
   subscribeTopic(topic: GossipTopic): void {
     const topicStr = stringifyGossipTopic(this.config, topic);
-    // Register known topicStr
-    this.gossipTopicCache.setTopic(topicStr, topic);
-
-    this.logger.verbose("Subscribe to gossipsub topic", {topic: topicStr});
+    const topicIndex = this.gossipTopicCache.getTopicIndex(topicStr);
+    // no need to register any topics, all topics are cached in the gossipTopicCache constructor
+    this.logger.verbose("Subscribe to gossipsub topic", {topic: topicStr, topicIndex});
     this.subscribe(topicStr);
   }
 
@@ -186,7 +190,8 @@ export class Eth2Gossipsub extends GossipSub {
    */
   unsubscribeTopic(topic: GossipTopic): void {
     const topicStr = stringifyGossipTopic(this.config, topic);
-    this.logger.verbose("Unsubscribe to gossipsub topic", {topic: topicStr});
+    const topicIndex = this.gossipTopicCache.getTopicIndex(topicStr);
+    this.logger.verbose("Unsubscribe to gossipsub topic", {topicStr, topicIndex});
     this.unsubscribe(topicStr);
   }
 
@@ -335,7 +340,7 @@ export class Eth2Gossipsub extends GossipSub {
 
       this.events.emit(NetworkEvent.pendingGossipsubMessage, {
         // send as minimal data as possible, network processor has its own topic cache to reconstruct the topic
-        topic: msg.topic,
+        topic: this.gossipTopicCache.getTopicIndex(msg.topic),
         msgData: msg.data,
         msgId,
         propagationSource: peerIdIndex,

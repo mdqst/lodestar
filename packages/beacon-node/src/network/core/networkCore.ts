@@ -34,6 +34,7 @@ import {peerIdFromString, peerIdToString} from "../../util/peerId.js";
 import {AttnetsService} from "../subnets/attnetsService.js";
 import {NetworkCoreMetrics, createNetworkCoreMetrics} from "./metrics.js";
 import {INetworkCore, MultiaddrStr, PeerIdStr} from "./types.js";
+import {GossipTopicCache} from "../gossip/topic.js";
 
 type Mods = {
   libp2p: Libp2p;
@@ -172,6 +173,7 @@ export class NetworkCore implements INetworkCore {
       opts
     );
 
+    const gossipTopicCache = new GossipTopicCache(config, clock.currentEpoch);
     const gossip = new Eth2Gossipsub(opts, {
       config,
       libp2p,
@@ -184,6 +186,7 @@ export class NetworkCore implements INetworkCore {
       },
       peersData,
       events,
+      gossipTopicCache,
     });
 
     // Note: should not be necessary, already called in createNodeJsLibp2p()
