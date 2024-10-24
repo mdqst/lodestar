@@ -113,7 +113,7 @@ wireEventsOnWorkerThread<NetworkEventData>(
   parentPort,
   networkCoreWorkerMetrics,
   networkEventDirection,
-  NetworkEventNames,
+  NetworkEventNames
 );
 wireEventsOnWorkerThread<ReqRespBridgeEventData>(
   NetworkWorkerThreadEventType.reqRespBridgeEvents,

@@ -11,6 +11,7 @@ import {
   GossipMessageInfo,
 } from "../gossip/interface.js";
 import {GossipActionError, GossipAction, AttestationError} from "../../chain/errors/index.js";
+import {TopicValidatorResultIndex} from "../gossip/encoding.js";
 
 export type ValidatorFnModules = {
   config: ChainForkConfig;
@@ -48,32 +49,32 @@ export function getGossipValidatorBatchFn(
 
       return results.map((e) => {
         if (e == null) {
-          return TopicValidatorResult.Accept;
+          return TopicValidatorResultIndex.Accept;
         }
 
         if (!(e instanceof AttestationError)) {
           logger.debug(`Gossip batch validation ${type} threw a non-AttestationError`, {}, e as Error);
           metrics?.networkProcessor.gossipValidationIgnore.inc({topic: type});
-          return TopicValidatorResult.Ignore;
+          return TopicValidatorResultIndex.Ignore;
         }
 
         switch (e.action) {
           case GossipAction.IGNORE:
             metrics?.networkProcessor.gossipValidationIgnore.inc({topic: type});
-            return TopicValidatorResult.Ignore;
+            return TopicValidatorResultIndex.Ignore;
 
           case GossipAction.REJECT:
             metrics?.networkProcessor.gossipValidationReject.inc({topic: type});
             logger.debug(`Gossip validation ${type} rejected`, {}, e);
-            return TopicValidatorResult.Reject;
+            return TopicValidatorResultIndex.Reject;
         }
       });
     } catch (e) {
       // Don't expect error here
       logger.debug(`Gossip batch validation ${type} threw an error`, {}, e as Error);
-      const results: TopicValidatorResult[] = [];
+      const results: TopicValidatorResultIndex[] = [];
       for (let i = 0; i < messageInfos.length; i++) {
-        results.push(TopicValidatorResult.Ignore);
+        results.push(TopicValidatorResultIndex.Ignore);
       }
       return results;
     }
@@ -110,12 +111,12 @@ export function getGossipValidatorFn(gossipHandlers: GossipHandlers, modules: Va
 
       metrics?.networkProcessor.gossipValidationAccept.inc({topic: type});
 
-      return TopicValidatorResult.Accept;
+      return TopicValidatorResultIndex.Accept;
     } catch (e) {
       if (!(e instanceof GossipActionError)) {
         // not deserve to log error here, it looks too dangerous to users
         logger.debug(`Gossip validation ${type} threw a non-GossipActionError`, {}, e as Error);
-        return TopicValidatorResult.Ignore;
+        return TopicValidatorResultIndex.Ignore;
       }
 
       // Metrics on specific error reason
@@ -128,12 +129,12 @@ export function getGossipValidatorFn(gossipHandlers: GossipHandlers, modules: Va
       switch (e.action) {
         case GossipAction.IGNORE:
           metrics?.networkProcessor.gossipValidationIgnore.inc({topic: type});
-          return TopicValidatorResult.Ignore;
+          return TopicValidatorResultIndex.Ignore;
 
         case GossipAction.REJECT:
           metrics?.networkProcessor.gossipValidationReject.inc({topic: type});
           logger.debug(`Gossip validation ${type} rejected`, {}, e);
-          return TopicValidatorResult.Reject;
+          return TopicValidatorResultIndex.Reject;
       }
     }
   };

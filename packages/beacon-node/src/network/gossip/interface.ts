@@ -1,5 +1,4 @@
 import {Libp2p} from "libp2p";
-import {Message, TopicValidatorResult} from "@libp2p/interface";
 import {PeerIdStr} from "@chainsafe/libp2p-gossipsub/types";
 import {ForkName} from "@lodestar/params";
 import {
@@ -20,6 +19,7 @@ import {IBeaconChain} from "../../chain/index.js";
 import {JobItemQueue} from "../../util/queue/index.js";
 import {AttestationError, AttestationErrorType} from "../../chain/errors/attestationError.js";
 import {GossipActionError} from "../../chain/errors/gossipValidation.js";
+import {TopicValidatorResultIndex} from "./encoding.js";
 
 export enum GossipType {
   beacon_block = "beacon_block",
@@ -149,9 +149,9 @@ export type GossipMessageInfo = {
   indexed?: string;
 };
 
-export type GossipValidatorFn = (messageInfo: GossipMessageInfo) => Promise<TopicValidatorResult>;
+export type GossipValidatorFn = (messageInfo: GossipMessageInfo) => Promise<TopicValidatorResultIndex>;
 
-export type GossipValidatorBatchFn = (messageInfos: GossipMessageInfo[]) => Promise<TopicValidatorResult[]>;
+export type GossipValidatorBatchFn = (messageInfos: GossipMessageInfo[]) => Promise<TopicValidatorResultIndex[]>;
 
 export type ValidatorFnsByType = {[K in GossipType]: GossipValidatorFn};
 

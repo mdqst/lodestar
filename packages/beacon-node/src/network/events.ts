@@ -49,7 +49,7 @@ export const NetworkEventNames: Record<NetworkEvent, string> = {
   [NetworkEvent.newPeerIndex]: "gossip.newPeerInde",
   [NetworkEvent.pendingGossipsubMessage]: "gossip.pendingGossipsubMessage",
   [NetworkEvent.gossipMessageValidationResult]: "gossip.messageValidationResult",
-}
+};
 
 export const networkEventDirection: Record<NetworkEvent, EventDirection> = {
   [NetworkEvent.peerConnected]: EventDirection.workerToMain,

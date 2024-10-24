@@ -5,7 +5,7 @@ import {sleep} from "@lodestar/utils";
 import {Metrics} from "../metrics/metrics.js";
 import {NetworkCoreWorkerMetrics} from "../network/core/metrics.js";
 import {StrictEventEmitterSingleArg} from "./strictEvents.js";
-import { NetworkWorkerThreadEventType } from "../network/core/events.js";
+import {NetworkWorkerThreadEventType} from "../network/core/events.js";
 
 export type WorkerBridgeEvent<EventData extends Record<number, unknown>> = {
   type: NetworkWorkerThreadEventType;
@@ -33,7 +33,7 @@ export function wireEventsOnWorkerThread<EventData extends Record<number, unknow
   parentPort: MessagePort,
   metrics: NetworkCoreWorkerMetrics | null,
   isWorkerToMain: {[K in keyof EventData]: EventDirection},
-  eventNames: {[K in keyof EventData]: string},
+  eventNames: {[K in keyof EventData]: string}
 ): void {
   // Subscribe to events from main thread
   parentPort.on("message", (data: WorkerBridgeEvent<EventData>) => {

@@ -110,11 +110,19 @@ export class DataTransformSnappy implements DataTransform {
   }
 }
 
-const topicValidatorResults = Object.values(TopicValidatorResult);
-export function getTopicValidatorResult(index: number): TopicValidatorResult {
-  return topicValidatorResults[index];
+export enum TopicValidatorResultIndex {
+  Accept = 0,
+  Ignore = 1,
+  Reject = 2,
 }
 
-export function getTopicValidatorResultIndex(result: TopicValidatorResult): number {
-  return topicValidatorResults.indexOf(result);
+export function getTopicValidatorResult(index: TopicValidatorResultIndex): TopicValidatorResult {
+  switch (index) {
+    case TopicValidatorResultIndex.Accept:
+      return TopicValidatorResult.Accept;
+    case TopicValidatorResultIndex.Ignore:
+      return TopicValidatorResult.Ignore;
+    case TopicValidatorResultIndex.Reject:
+      return TopicValidatorResult.Reject;
+  }
 }
