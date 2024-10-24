@@ -11,28 +11,19 @@ import {PeerIndex} from "./gossip/index.js";
 
 export enum NetworkEvent {
   /** A relevant peer has connected or has been re-STATUS'd */
-  /** "peer-manager.peer-connected" */
   peerConnected = 0,
   /** A peer has been disconnected */
-  /** "peer-manager.peer-disconnected" */
   peerDisconnected = 1,
-  /** "req-resp.request" */
   reqRespRequest = 2,
   // TODO remove this event, this is not a network-level concern, rather a chain / sync concern
-  /** "unknownBlockParent" */
   unknownBlockParent = 3,
-  /** "unknownBlock" */
   unknownBlock = 4,
-  /** "unknownBlockInput" */
   unknownBlockInput = 5,
-  /** "gossip.newPeerIndex" */
   newPeerIndex = 6,
   // Network processor events
   /** (Network -> App) A gossip message is ready for validation */
-  /** "gossip.pendingGossipsubMessage" */
   pendingGossipsubMessage = 7,
   /** (App -> Network) A gossip message has been validated */
-  /** "gossip.messageValidationResult" */
   gossipMessageValidationResult = 8,
 }
 
@@ -47,6 +38,18 @@ export type NetworkEventData = {
   [NetworkEvent.pendingGossipsubMessage]: ExchangeGossipsubMessage;
   [NetworkEvent.gossipMessageValidationResult]: ExchangeGossipValidationResult;
 };
+
+export const NetworkEventNames: Record<NetworkEvent, string> = {
+  [NetworkEvent.peerConnected]: "peer-manager.peer-connected",
+  [NetworkEvent.peerDisconnected]: "peer-manager.peer-disconnected",
+  [NetworkEvent.reqRespRequest]: "req-resp.request",
+  [NetworkEvent.unknownBlockParent]: "unknownBlockParent",
+  [NetworkEvent.unknownBlock]: "unknownBlock",
+  [NetworkEvent.unknownBlockInput]: "unknownBlockInput",
+  [NetworkEvent.newPeerIndex]: "gossip.newPeerInde",
+  [NetworkEvent.pendingGossipsubMessage]: "gossip.pendingGossipsubMessage",
+  [NetworkEvent.gossipMessageValidationResult]: "gossip.messageValidationResult",
+}
 
 export const networkEventDirection: Record<NetworkEvent, EventDirection> = {
   [NetworkEvent.peerConnected]: EventDirection.workerToMain,

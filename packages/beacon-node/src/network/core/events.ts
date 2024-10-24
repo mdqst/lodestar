@@ -23,6 +23,13 @@ export type ReqRespBridgeEventData = {
   [ReqRespBridgeEvent.incomingResponse]: IteratorEvent<ResponseIncoming>;
 };
 
+export const ReqRespBridgeEventNames: Record<ReqRespBridgeEvent, string> = {
+  [ReqRespBridgeEvent.outgoingRequest]: "reqresp.outgoingRequest",
+  [ReqRespBridgeEvent.outgoingResponse]: "reqresp.outgoingResponse",
+  [ReqRespBridgeEvent.incomingRequest]: "reqresp.incomingRequest",
+  [ReqRespBridgeEvent.incomingResponse]: "reqresp.incomingResponse",
+};
+
 type IReqRespBridgeEventBus = StrictEventEmitterSingleArg<ReqRespBridgeEventData>;
 
 export class ReqRespBridgeEventBus extends (EventEmitter as {new (): IReqRespBridgeEventBus}) {}
