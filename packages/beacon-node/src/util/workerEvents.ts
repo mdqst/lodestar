@@ -5,11 +5,12 @@ import {sleep} from "@lodestar/utils";
 import {Metrics} from "../metrics/metrics.js";
 import {NetworkCoreWorkerMetrics} from "../network/core/metrics.js";
 import {StrictEventEmitterSingleArg} from "./strictEvents.js";
+import { NetworkWorkerThreadEventType } from "../network/core/events.js";
 
 const NANO_TO_SECOND_CONVERSION = 1e9;
 
 export type WorkerBridgeEvent<EventData> = {
-  type: string;
+  type: NetworkWorkerThreadEventType;
   event: keyof EventData;
   posted: [number, number];
   data: EventData[keyof EventData];
@@ -29,7 +30,7 @@ export enum EventDirection {
  * - main to worker
  */
 export function wireEventsOnWorkerThread<EventData>(
-  mainEventName: string,
+  mainEventName: NetworkWorkerThreadEventType,
   events: StrictEventEmitterSingleArg<EventData>,
   parentPort: MessagePort,
   metrics: NetworkCoreWorkerMetrics | null,
@@ -70,7 +71,7 @@ export function wireEventsOnWorkerThread<EventData>(
 }
 
 export function wireEventsOnMainThread<EventData>(
-  mainEventName: string,
+  mainEventName: NetworkWorkerThreadEventType,
   events: StrictEventEmitterSingleArg<EventData>,
   worker: Pick<Worker, "on" | "postMessage">,
   metrics: Metrics | null,

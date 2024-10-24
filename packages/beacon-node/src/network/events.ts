@@ -11,21 +11,29 @@ import {PeerIndex} from "./gossip/index.js";
 
 export enum NetworkEvent {
   /** A relevant peer has connected or has been re-STATUS'd */
-  peerConnected = "peer-manager.peer-connected",
+  /** "peer-manager.peer-connected" */
+  peerConnected = 0,
   /** A peer has been disconnected */
-  peerDisconnected = "peer-manager.peer-disconnected",
-  reqRespRequest = "req-resp.request",
+  /** "peer-manager.peer-disconnected" */
+  peerDisconnected = 1,
+  /** "req-resp.request" */
+  reqRespRequest = 2,
   // TODO remove this event, this is not a network-level concern, rather a chain / sync concern
-  unknownBlockParent = "unknownBlockParent",
-  unknownBlock = "unknownBlock",
-  unknownBlockInput = "unknownBlockInput",
-
-  newPeerIndex = "gossip.newPeerIndex",
+  /** "unknownBlockParent" */
+  unknownBlockParent = 3,
+  /** "unknownBlock" */
+  unknownBlock = 4,
+  /** "unknownBlockInput" */
+  unknownBlockInput = 5,
+  /** "gossip.newPeerIndex" */
+  newPeerIndex = 6,
   // Network processor events
   /** (Network -> App) A gossip message is ready for validation */
-  pendingGossipsubMessage = "gossip.pendingGossipsubMessage",
+  /** "gossip.pendingGossipsubMessage" */
+  pendingGossipsubMessage = 7,
   /** (App -> Network) A gossip message has been validated */
-  gossipMessageValidationResult = "gossip.messageValidationResult",
+  /** "gossip.messageValidationResult" */
+  gossipMessageValidationResult = 8,
 }
 
 export type NetworkEventData = {

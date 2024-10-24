@@ -6,10 +6,14 @@ import {EventDirection} from "../../util/workerEvents.js";
 import {IncomingRequestArgs, OutgoingRequestArgs} from "../reqresp/types.js";
 
 export enum ReqRespBridgeEvent {
-  outgoingRequest = "reqresp.outgoingRequest",
-  outgoingResponse = "reqresp.outgoingResponse",
-  incomingRequest = "reqresp.incomingRequest",
-  incomingResponse = "reqresp.incomingResponse",
+  /** "reqresp.outgoingRequest" */
+  outgoingRequest = 0,
+  /** "reqresp.outgoingResponse" */
+  outgoingResponse = 1,
+  /** "reqresp.incomingRequest" */
+  incomingRequest = 2,
+  /** "reqresp.incomingResponse" */
+  incomingResponse = 3,
 }
 
 export type ReqRespBridgeEventData = {
@@ -54,6 +58,8 @@ export function getReqRespBridgeRespEvents(
 }
 
 export enum NetworkWorkerThreadEventType {
-  networkEvent = "networkEvent",
-  reqRespBridgeEvents = "reqRespBridgeEvents",
+  /** "networkEvent" */
+  networkEvent = 0,
+  /** "reqRespBridgeEvents" */
+  reqRespBridgeEvents = 1,
 }
