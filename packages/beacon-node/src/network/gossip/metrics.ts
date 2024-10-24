@@ -21,6 +21,10 @@ export function createEth2GossipsubMetrics(register: RegistryMetricCreator) {
         name: "lodestar_gossip_score_avg_min_max",
         help: "Avg min max of all gossip peer scores",
       }),
+      unknownPeerIndexCount: register.gauge({
+        name: "lodestar_gossip_unknown_peer_index_count",
+        help: "Count of unknown peer indexes",
+      }),
     },
     gossipMesh: {
       peersByType: register.gauge<{type: GossipType; fork: ForkName}>({

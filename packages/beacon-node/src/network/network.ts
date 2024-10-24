@@ -635,6 +635,8 @@ export class Network implements INetwork {
   };
 
   private onPeerDisconnected = (data: NetworkEventData[NetworkEvent.peerDisconnected]): void => {
-    this.connectedPeers.delete(data.peer);
+    const peerId = data.peer;
+    this.connectedPeers.delete(peerId);
+    this.networkProcessor.onPeerDisconnected(peerId);
   };
 }

@@ -632,14 +632,16 @@ export class PeerManager {
     const {direction, status, remotePeer} = evt.detail;
 
     // remove the ping and status timer for the peer
-    this.connectedPeers.delete(remotePeer.toString());
+    const remotePeerId = remotePeer.toString();
+    this.connectedPeers.delete(remotePeerId);
 
     this.logger.verbose("peer disconnected", {peer: prettyPrintPeerId(remotePeer), direction, status});
-    this.networkEventBus.emit(NetworkEvent.peerDisconnected, {peer: remotePeer.toString()});
+    this.networkEventBus.emit(NetworkEvent.peerDisconnected, {peer: remotePeerId});
     this.metrics?.peerDisconnectedEvent.inc({direction});
     this.libp2p.peerStore
       .merge(remotePeer, {tags: {[PEER_RELEVANT_TAG]: undefined}})
-      .catch((e) => this.logger.verbose("cannot untag peer", {peerId: remotePeer.toString()}, e as Error));
+      .catch((e) => this.logger.verbose("cannot untag peer", {peerId: remotePeerId}, e as Error));
+    this.gossipsub.onLibp2pPeerDisconnect(remotePeerId);
   };
 
   private async disconnect(peer: PeerId): Promise<void> {

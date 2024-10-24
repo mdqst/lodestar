@@ -25,6 +25,7 @@ import {
   GOSSIP_D_HIGH,
   GOSSIP_D_LOW,
 } from "./scoringParameters.js";
+import {PeerIdStr} from "../peers/index.js";
 
 /** As specified in https://github.com/ethereum/consensus-specs/blob/v1.1.10/specs/phase0/p2p-interface.md */
 const GOSSIPSUB_HEARTBEAT_INTERVAL = 0.7 * 1000;
@@ -77,9 +78,15 @@ export class Eth2Gossipsub extends GossipSub {
   private readonly logger: Logger;
   private readonly peersData: PeersData;
   private readonly events: NetworkEventBus;
+  private unknownPeerIndex = 0;
 
   // Internal caches
   private readonly gossipTopicCache: GossipTopicCache;
+  private readonly peerIdToIndex = new Map<PeerIdStr, number>();
+  private readonly indexToPeerId = new Map<number, PeerIdStr>();
+  // TODO: give a reasonable max number, reset to 0
+  // for experiments, we keep increasing this number and ignore collisions
+  private peerNextIndex = 0;
 
   constructor(opts: Eth2GossipsubOpts, modules: Eth2GossipsubModules) {
     const {allowPublishToZeroPeers, gossipsubD, gossipsubDLow, gossipsubDHigh} = opts;
@@ -183,6 +190,17 @@ export class Eth2Gossipsub extends GossipSub {
     this.unsubscribe(topicStr);
   }
 
+  /**
+   * There is a naming conflict with onPeerDisconnect of parent class, so make it onLibp2pPeerDisconnect()
+   */
+  onLibp2pPeerDisconnect(peerId: PeerIdStr): void {
+    const peerIndex = this.peerIdToIndex.get(peerId);
+    if (peerIndex !== undefined) {
+      this.peerIdToIndex.delete(peerId);
+      this.indexToPeerId.delete(peerIndex);
+    }
+  }
+
   private onScrapeLodestarMetrics(metrics: Eth2GossipsubMetrics): void {
     const mesh = this.mesh;
     // biome-ignore lint/complexity/useLiteralKeys: `topics` is a private attribute
@@ -282,6 +300,7 @@ export class Eth2Gossipsub extends GossipSub {
 
     // Register full score too
     metrics.gossipPeer.score.set(gossipScores);
+    metrics.gossipPeer.unknownPeerIndexCount.set(this.unknownPeerIndex);
   }
 
   private onGossipsubMessage(event: GossipsubEvents["gossipsub:message"]): void {
@@ -293,17 +312,33 @@ export class Eth2Gossipsub extends GossipSub {
     // Get seenTimestamp before adding the message to the queue or add async delays
     const seenTimestampSec = Date.now() / 1000;
 
+    // Hot path, use cached .toString() version
+    const peerId = propagationSource.toString();
+    let peerIdIndex = this.peerIdToIndex.get(peerId);
+    let newPeer = false;
+    if (!peerIdIndex) {
+      this.peerIdToIndex.set(peerId, this.peerNextIndex);
+      this.indexToPeerId.set(this.peerNextIndex, peerId);
+      peerIdIndex = this.peerNextIndex;
+      this.peerNextIndex++;
+      newPeer = true;
+    }
+
     // Use setTimeout to yield to the macro queue
     // Without this we'll have huge event loop lag
     // See https://github.com/ChainSafe/lodestar/issues/5604
     callInNextEventLoop(() => {
+      // this should be the first message to inform peer index to network processor
+      if (newPeer) {
+        this.events.emit(NetworkEvent.newPeerIndex, {peerId, peerIndex: peerIdIndex});
+      }
+
       this.events.emit(NetworkEvent.pendingGossipsubMessage, {
         // send as minimal data as possible, network processor has its own topic cache to reconstruct the topic
         topic: msg.topic,
         msgData: msg.data,
         msgId,
-        // Hot path, use cached .toString() version
-        propagationSource: propagationSource.toString(),
+        propagationSource: peerIdIndex,
         seenTimestampSec,
       });
     });
@@ -314,7 +349,12 @@ export class Eth2Gossipsub extends GossipSub {
     // Without this we'll have huge event loop lag
     // See https://github.com/ChainSafe/lodestar/issues/5604
     callInNextEventLoop(() => {
-      this.reportMessageValidationResult(data.msgId, data.propagationSource, getTopicValidatorResult(data.acceptance));
+      const propagationSource = this.indexToPeerId.get(data.propagationSource);
+      if (propagationSource === undefined) {
+        this.unknownPeerIndex++;
+        return;
+      }
+      this.reportMessageValidationResult(data.msgId, propagationSource, getTopicValidatorResult(data.acceptance));
     });
   }
 }

@@ -18,6 +18,7 @@ export enum NetworkEvent {
   unknownBlock = "unknownBlock",
   unknownBlockInput = "unknownBlockInput",
 
+  newPeerIndex = "gossip.newPeerIndex",
   // Network processor events
   /** (Network -> App) A gossip message is ready for validation */
   pendingGossipsubMessage = "gossip.pendingGossipsubMessage",
@@ -32,6 +33,7 @@ export type NetworkEventData = {
   [NetworkEvent.unknownBlockParent]: {blockInput: BlockInput; peer: PeerIdStr};
   [NetworkEvent.unknownBlock]: {rootHex: RootHex; peer?: PeerIdStr};
   [NetworkEvent.unknownBlockInput]: {blockInput: BlockInput | NullBlockInput; peer?: PeerIdStr};
+  [NetworkEvent.newPeerIndex]: ExchangePeerIdIndex;
   [NetworkEvent.pendingGossipsubMessage]: ExchangeGossipsubMessage;
   [NetworkEvent.gossipMessageValidationResult]: ExchangeGossipValidationResult;
 };
@@ -43,6 +45,7 @@ export const networkEventDirection: Record<NetworkEvent, EventDirection> = {
   [NetworkEvent.unknownBlockParent]: EventDirection.workerToMain,
   [NetworkEvent.unknownBlock]: EventDirection.workerToMain,
   [NetworkEvent.unknownBlockInput]: EventDirection.workerToMain,
+  [NetworkEvent.newPeerIndex]: EventDirection.workerToMain,
   [NetworkEvent.pendingGossipsubMessage]: EventDirection.workerToMain,
   [NetworkEvent.gossipMessageValidationResult]: EventDirection.mainToWorker,
 };
@@ -51,14 +54,20 @@ export type INetworkEventBus = StrictEventEmitterSingleArg<NetworkEventData>;
 
 export class NetworkEventBus extends (EventEmitter as {new (): INetworkEventBus}) {}
 
+export type ExchangePeerIdIndex = {
+  peerId: PeerIdStr;
+  peerIndex: number;
+};
+
 /**
  * The interface to exchange gossip messages from worker to main thread
+ * TODO: make names shorter
  */
 export type ExchangeGossipsubMessage = {
   topic: string;
   msgData: Uint8Array;
   msgId: string;
-  propagationSource: PeerIdStr;
+  propagationSource: number;
   seenTimestampSec: number;
 };
 
@@ -67,7 +76,7 @@ export type ExchangeGossipsubMessage = {
  */
 export type ExchangeGossipValidationResult = {
   msgId: string;
-  propagationSource: PeerIdStr;
+  propagationSource: number;
   // acceptance is index to TopicValidatorResult
   // we use number instead of string to reduce structural clone cost
   acceptance: number;

@@ -130,6 +130,15 @@ export function createLodestarMetrics(
         help: "Total times network processor can not accept work on executeWork",
         labelNames: ["reason"],
       }),
+      unknownPeerIndex: register.gauge({
+        name: "lodestar_network_processor_unknown_peer_index_total",
+        help: "Total times network processor received a message from an unknown peer index",
+      }),
+      unknownPeerId: register.gauge<{topic: GossipType}>({
+        name: "lodestar_network_processor_unknown_peer_id_total",
+        help: "Total times network processor received a message from an unknown peer id",
+        labelNames: ["topic"],
+      }),
     },
 
     networkWorkerHandler: {

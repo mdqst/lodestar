@@ -9,7 +9,7 @@ import {GossipErrorCode} from "../../chain/errors/gossipValidation.js";
 import {Metrics} from "../../metrics/metrics.js";
 import {IBeaconDb} from "../../db/interface.js";
 import {ClockEvent} from "../../util/clock.js";
-import {ExchangeGossipsubMessage, NetworkEvent, NetworkEventBus} from "../events.js";
+import {ExchangeGossipsubMessage, ExchangePeerIdIndex, NetworkEvent, NetworkEventBus} from "../events.js";
 import {
   GossipHandlers,
   GossipMessageInfo,
@@ -156,6 +156,8 @@ export class NetworkProcessor {
   private readonly gossipValidatorBatchFn: GossipValidatorBatchFn;
   private readonly gossipQueues: ReturnType<typeof createGossipQueues>;
   // Internal caches
+  private readonly peerIdToIndex = new Map<PeerIdStr, number>();
+  private readonly indexToPeerId = new Map<number, PeerIdStr>();
   private readonly gossipTopicCache: GossipTopicCache;
   private readonly gossipTopicConcurrency: {[K in GossipType]: number};
   private readonly extractBlockSlotRootFns = createExtractBlockSlotRootFns();
@@ -185,6 +187,7 @@ export class NetworkProcessor {
       modules
     );
 
+    events.on(NetworkEvent.newPeerIndex, this.onNewPeerIndex.bind(this));
     events.on(NetworkEvent.pendingGossipsubMessage, this.onPendingGossipsubMessage.bind(this));
     this.chain.emitter.on(routes.events.EventType.block, this.onBlockProcessed.bind(this));
     this.chain.clock.on(ClockEvent.slot, this.onClockSlot.bind(this));
@@ -218,6 +221,7 @@ export class NetworkProcessor {
   }
 
   async stop(): Promise<void> {
+    this.events.off(NetworkEvent.newPeerIndex, this.onNewPeerIndex);
     this.events.off(NetworkEvent.pendingGossipsubMessage, this.onPendingGossipsubMessage);
     this.chain.emitter.off(routes.events.EventType.block, this.onBlockProcessed);
     this.chain.emitter.off(ClockEvent.slot, this.onClockSlot);
@@ -247,10 +251,30 @@ export class NetworkProcessor {
     this.events.emit(NetworkEvent.unknownBlock, {rootHex: root, peer});
   }
 
+  onPeerDisconnected(peerId: PeerIdStr): void {
+    const peerIndex = this.peerIdToIndex.get(peerId);
+    if (peerIndex !== undefined) {
+      this.peerIdToIndex.delete(peerId);
+      this.indexToPeerId.delete(peerIndex);
+    }
+  }
+
+  private onNewPeerIndex({peerId, peerIndex}: ExchangePeerIdIndex): void {
+    this.peerIdToIndex.set(peerId, peerIndex);
+    this.indexToPeerId.set(peerIndex, peerId);
+  }
+
   private onPendingGossipsubMessage(exchangeMessage: ExchangeGossipsubMessage): void {
-    // only topic type is different between 2 types but we can convert it soon to avoid an object allocation
+    // some properties are different between 2 types but we overwrite them right away
     const message = exchangeMessage as unknown as PendingGossipsubMessage;
     message.topic = this.gossipTopicCache.getTopic(exchangeMessage.topic);
+    const propagationSource = this.indexToPeerId.get(exchangeMessage.propagationSource);
+    if (!propagationSource) {
+      this.metrics?.networkProcessor.unknownPeerIndex.inc();
+      this.logger.warn("Received gossip message from unknown peer", {peerIndex: exchangeMessage.propagationSource, topic: exchangeMessage.topic});
+      return;
+    }
+    message.propagationSource = propagationSource;
     const topicType = message.topic.type;
     const extractBlockSlotRootFn = this.extractBlockSlotRootFns[topicType];
     // check block root of Attestation and SignedAggregateAndProof messages
@@ -464,20 +488,30 @@ export class NetworkProcessor {
     if (Array.isArray(messageOrArray)) {
       for (const [i, msg] of messageOrArray.entries()) {
         callInNextEventLoop(() => {
-          this.events.emit(NetworkEvent.gossipMessageValidationResult, {
-            msgId: msg.msgId,
-            propagationSource: msg.propagationSource,
-            acceptance: getTopicValidatorResultIndex(acceptanceArr[i]),
-          });
+          const peerIndex = this.peerIdToIndex.get(msg.propagationSource);
+          if (peerIndex === undefined) {
+            this.metrics?.networkProcessor.unknownPeerId.inc({topic: msg.topic.type});
+          } else {
+            this.events.emit(NetworkEvent.gossipMessageValidationResult, {
+              msgId: msg.msgId,
+              propagationSource: peerIndex,
+              acceptance: getTopicValidatorResultIndex(acceptanceArr[i]),
+            });
+          }
         });
       }
     } else {
       callInNextEventLoop(() => {
-        this.events.emit(NetworkEvent.gossipMessageValidationResult, {
-          msgId: messageOrArray.msgId,
-          propagationSource: messageOrArray.propagationSource,
-          acceptance: getTopicValidatorResultIndex(acceptanceArr[0]),
-        });
+        const peerIndex = this.peerIdToIndex.get(messageOrArray.propagationSource);
+        if (peerIndex === undefined) {
+          this.metrics?.networkProcessor.unknownPeerId.inc({topic: messageOrArray.topic.type});
+        } else {
+          this.events.emit(NetworkEvent.gossipMessageValidationResult, {
+            msgId: messageOrArray.msgId,
+            propagationSource: peerIndex,
+            acceptance: getTopicValidatorResultIndex(acceptanceArr[0]),
+          });
+        }
       });
     }
   }
