@@ -7,12 +7,10 @@ import {NetworkCoreWorkerMetrics} from "../network/core/metrics.js";
 import {StrictEventEmitterSingleArg} from "./strictEvents.js";
 import { NetworkWorkerThreadEventType } from "../network/core/events.js";
 
-const NANO_TO_SECOND_CONVERSION = 1e9;
-
 export type WorkerBridgeEvent<EventData> = {
   type: NetworkWorkerThreadEventType;
   event: keyof EventData;
-  posted: [number, number];
+  posted: number;
   data: EventData[keyof EventData];
 };
 
@@ -44,8 +42,7 @@ export function wireEventsOnWorkerThread<EventData>(
       // This check is not necessary but added for safety in case of improper implemented events
       isWorkerToMain[data.event] === EventDirection.mainToWorker
     ) {
-      const [sec, nanoSec] = process.hrtime(data.posted);
-      const networkWorkerLatency = sec + nanoSec / NANO_TO_SECOND_CONVERSION;
+      const networkWorkerLatency = (Date.now() - data.posted) / 1000;
       metrics?.networkWorkerWireEventsOnWorkerThreadLatency.observe(
         {eventName: data.event as string},
         networkWorkerLatency
@@ -61,7 +58,7 @@ export function wireEventsOnWorkerThread<EventData>(
         const workerEvent: WorkerBridgeEvent<EventData> = {
           type: mainEventName,
           event: eventName,
-          posted: process.hrtime(),
+          posted: Date.now(),
           data,
         };
         parentPort.postMessage(workerEvent);
@@ -85,8 +82,7 @@ export function wireEventsOnMainThread<EventData>(
       // This check is not necessary but added for safety in case of improper implemented events
       isWorkerToMain[data.event] === EventDirection.workerToMain
     ) {
-      const [sec, nanoSec] = process.hrtime(data.posted);
-      const networkWorkerLatency = sec + nanoSec / NANO_TO_SECOND_CONVERSION;
+      const networkWorkerLatency = (Date.now() - data.posted) / 1000;
       metrics?.networkWorkerWireEventsOnMainThreadLatency.observe(
         {eventName: data.event as string},
         networkWorkerLatency
@@ -102,7 +98,7 @@ export function wireEventsOnMainThread<EventData>(
         const workerEvent: WorkerBridgeEvent<EventData> = {
           type: mainEventName,
           event: eventName,
-          posted: process.hrtime(),
+          posted: Date.now(),
           data,
         };
         worker.postMessage(workerEvent);
