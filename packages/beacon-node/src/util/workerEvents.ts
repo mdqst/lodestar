@@ -38,19 +38,21 @@ export function wireEventsOnWorkerThread<EventData extends Record<string, unknow
   const networkEvents = Object.keys(isWorkerToMain) as (keyof EventData)[];
   parentPort.on("message", (data: WorkerBridgeEvent<EventData>) => {
     const {meta} = data;
-    const [type, eventIndex, postedAt] = meta;
-    if (
-      typeof data === "object" &&
-      type === mainEventName &&
-      // This check is not necessary but added for safety in case of improper implemented events
-      isWorkerToMain[eventIndex] === EventDirection.mainToWorker
-    ) {
-      const networkWorkerLatency = (Date.now() - postedAt) / 1000;
-      metrics?.networkWorkerWireEventsOnWorkerThreadLatency.observe(
-        {eventName: networkEvents[eventIndex] as string},
-        networkWorkerLatency
-      );
-      events.emit(networkEvents[eventIndex], data.data);
+    if (meta) {
+      const [type, eventIndex, postedAt] = meta;
+      if (
+        typeof data === "object" &&
+        type === mainEventName &&
+        // This check is not necessary but added for safety in case of improper implemented events
+        isWorkerToMain[eventIndex] === EventDirection.mainToWorker
+      ) {
+        const networkWorkerLatency = (Date.now() - postedAt) / 1000;
+        metrics?.networkWorkerWireEventsOnWorkerThreadLatency.observe(
+          {eventName: networkEvents[eventIndex] as string},
+          networkWorkerLatency
+        );
+        events.emit(networkEvents[eventIndex], data.data);
+      }
     }
   });
 
@@ -79,19 +81,21 @@ export function wireEventsOnMainThread<EventData extends Record<string, unknown>
   // Subscribe to events from main thread
   worker.on("message", (data: WorkerBridgeEvent<EventData>) => {
     const {meta} = data;
-    const [type, eventIndex, postedAt] = meta;
-    if (
-      typeof data === "object" &&
-      type === mainEventName &&
-      // This check is not necessary but added for safety in case of improper implemented events
-      isWorkerToMain[eventIndex] === EventDirection.workerToMain
-    ) {
-      const networkWorkerLatency = (Date.now() - postedAt) / 1000;
-      metrics?.networkWorkerWireEventsOnMainThreadLatency.observe(
-        {eventName: networkEvents[eventIndex] as string},
-        networkWorkerLatency
-      );
-      events.emit(networkEvents[eventIndex], data.data);
+    if (meta) {
+      const [type, eventIndex, postedAt] = meta;
+      if (
+        typeof data === "object" &&
+        type === mainEventName &&
+        // This check is not necessary but added for safety in case of improper implemented events
+        isWorkerToMain[eventIndex] === EventDirection.workerToMain
+      ) {
+        const networkWorkerLatency = (Date.now() - postedAt) / 1000;
+        metrics?.networkWorkerWireEventsOnMainThreadLatency.observe(
+          {eventName: networkEvents[eventIndex] as string},
+          networkWorkerLatency
+        );
+        events.emit(networkEvents[eventIndex], data.data);
+      }
     }
   });
 
