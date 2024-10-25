@@ -1,3 +1,8 @@
+/** A message should specify its transferrable data through thread boundary in `transferList` param */
+export type TransferrableMessage = {
+  transferList?: ArrayBuffer[];
+};
+
 /**
  * Simplified version of `strict-event-emitter-types` where each event only emits one argument
  */

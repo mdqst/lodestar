@@ -4,7 +4,7 @@ import {Logger} from "@lodestar/logger";
 import {sleep} from "@lodestar/utils";
 import {Metrics} from "../metrics/metrics.js";
 import {NetworkCoreWorkerMetrics} from "../network/core/metrics.js";
-import {StrictEventEmitterSingleArg} from "./strictEvents.js";
+import {StrictEventEmitterSingleArg, TransferrableMessage} from "./strictEvents.js";
 import {NetworkWorkerThreadEventType} from "../network/core/events.js";
 
 /** Use as lightweight message as possible when passing through thread boundary to minimize structural clone cost */
@@ -62,7 +62,7 @@ export function wireEventsOnWorkerThread<EventData extends Record<string, unknow
           meta: [mainEventName, networkEvents.indexOf(eventName), Date.now()],
           data,
         };
-        parentPort.postMessage(workerEvent);
+        parentPort.postMessage(workerEvent, (data as TransferrableMessage).transferList);
       });
     }
   }
@@ -103,7 +103,7 @@ export function wireEventsOnMainThread<EventData extends Record<string, unknown>
           meta: [mainEventName, networkEvents.indexOf(eventName), Date.now()],
           data,
         };
-        worker.postMessage(workerEvent);
+        worker.postMessage(workerEvent, (data as TransferrableMessage).transferList);
       });
     }
   }

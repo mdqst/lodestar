@@ -343,6 +343,7 @@ export class Eth2Gossipsub extends GossipSub {
         // send as minimal data as possible, network processor has its own topic cache to reconstruct the topic
         msgId,
         msgData: msg.data,
+        transferList: [msg.data.buffer],
         meta: [this.gossipTopicCache.getTopicIndex(msg.topic), peerIdIndex, seenTimestampSec],
       });
     });

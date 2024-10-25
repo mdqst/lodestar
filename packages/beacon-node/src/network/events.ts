@@ -67,6 +67,8 @@ export type ExchangePeerIdIndex = {
 export type ExchangeGossipsubMessage = {
   msgId: string;
   msgData: Uint8Array;
+  // this is actually msgData.buffer, to transfer its data through thread boundary without structural clone
+  transferList: ArrayBuffer[];
   // topic, propagationSource, seenTimestampSec
   meta: [TopicIndex, PeerIndex, number];
 };
