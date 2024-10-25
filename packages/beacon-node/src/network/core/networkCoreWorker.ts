@@ -12,7 +12,7 @@ import {AsyncIterableBridgeCaller, AsyncIterableBridgeHandler} from "../../util/
 import {Clock} from "../../util/clock.js";
 import {peerIdToString} from "../../util/peerId.js";
 import {profileNodeJS, writeHeapSnapshot} from "../../util/profile.js";
-import {NetworkEventBus, NetworkEventData, NetworkEventNames, networkEventDirection} from "../events.js";
+import {NetworkEventBus, NetworkEventData, networkEventDirection} from "../events.js";
 import {wireEventsOnWorkerThread} from "../../util/workerEvents.js";
 import {getNetworkCoreWorkerMetrics} from "./metrics.js";
 import {NetworkWorkerApi, NetworkWorkerData} from "./types.js";
@@ -21,7 +21,6 @@ import {
   NetworkWorkerThreadEventType,
   ReqRespBridgeEventBus,
   ReqRespBridgeEventData,
-  ReqRespBridgeEventNames,
   getReqRespBridgeReqEvents,
   getReqRespBridgeRespEvents,
   reqRespBridgeEventDirection,
@@ -112,16 +111,14 @@ wireEventsOnWorkerThread<NetworkEventData>(
   events,
   parentPort,
   networkCoreWorkerMetrics,
-  networkEventDirection,
-  NetworkEventNames
+  networkEventDirection
 );
 wireEventsOnWorkerThread<ReqRespBridgeEventData>(
   NetworkWorkerThreadEventType.reqRespBridgeEvents,
   reqRespBridgeEventBus,
   parentPort,
   networkCoreWorkerMetrics,
-  reqRespBridgeEventDirection,
-  ReqRespBridgeEventNames
+  reqRespBridgeEventDirection
 );
 
 const libp2pWorkerApi: NetworkWorkerApi = {

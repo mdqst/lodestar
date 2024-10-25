@@ -7,13 +7,13 @@ import {IncomingRequestArgs, OutgoingRequestArgs} from "../reqresp/types.js";
 
 export enum ReqRespBridgeEvent {
   /** "reqresp.outgoingRequest" */
-  outgoingRequest = 0,
+  outgoingRequest = "reqresp.outgoingRequest",
   /** "reqresp.outgoingResponse" */
-  outgoingResponse = 1,
+  outgoingResponse = "reqresp.outgoingResponse",
   /** "reqresp.incomingRequest" */
-  incomingRequest = 2,
+  incomingRequest = "reqresp.incomingRequest",
   /** "reqresp.incomingResponse" */
-  incomingResponse = 3,
+  incomingResponse = "reqresp.incomingResponse",
 }
 
 export type ReqRespBridgeEventData = {
@@ -21,13 +21,6 @@ export type ReqRespBridgeEventData = {
   [ReqRespBridgeEvent.outgoingResponse]: IteratorEvent<ResponseOutgoing>;
   [ReqRespBridgeEvent.incomingRequest]: RequestEvent<IncomingRequestArgs>;
   [ReqRespBridgeEvent.incomingResponse]: IteratorEvent<ResponseIncoming>;
-};
-
-export const ReqRespBridgeEventNames: Record<ReqRespBridgeEvent, string> = {
-  [ReqRespBridgeEvent.outgoingRequest]: "reqresp.outgoingRequest",
-  [ReqRespBridgeEvent.outgoingResponse]: "reqresp.outgoingResponse",
-  [ReqRespBridgeEvent.incomingRequest]: "reqresp.incomingRequest",
-  [ReqRespBridgeEvent.incomingResponse]: "reqresp.incomingResponse",
 };
 
 type IReqRespBridgeEventBus = StrictEventEmitterSingleArg<ReqRespBridgeEventData>;

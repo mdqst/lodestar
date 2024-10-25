@@ -7,11 +7,12 @@ import {NetworkCoreWorkerMetrics} from "../network/core/metrics.js";
 import {StrictEventEmitterSingleArg} from "./strictEvents.js";
 import {NetworkWorkerThreadEventType} from "../network/core/events.js";
 
-export type WorkerBridgeEvent<EventData extends Record<number, unknown>> = {
+/** Use as lightweight message as possible when passing through thread boundary to minimize structural clone cost */
+export type WorkerBridgeEvent<EventData> = {
   type: NetworkWorkerThreadEventType;
-  event: keyof EventData;
+  event: number;
   posted: number;
-  data: EventData[number];
+  data: EventData[keyof EventData];
 };
 
 export enum EventDirection {
@@ -27,15 +28,15 @@ export enum EventDirection {
  * - worker to main
  * - main to worker
  */
-export function wireEventsOnWorkerThread<EventData extends Record<number, unknown>>(
+export function wireEventsOnWorkerThread<EventData extends Record<string, unknown>>(
   mainEventName: NetworkWorkerThreadEventType,
   events: StrictEventEmitterSingleArg<EventData>,
   parentPort: MessagePort,
   metrics: NetworkCoreWorkerMetrics | null,
-  isWorkerToMain: {[K in keyof EventData]: EventDirection},
-  eventNames: {[K in keyof EventData]: string}
+  isWorkerToMain: {[K in keyof EventData]: EventDirection}
 ): void {
   // Subscribe to events from main thread
+  const networkEvents = Object.keys(isWorkerToMain) as (keyof EventData)[];
   parentPort.on("message", (data: WorkerBridgeEvent<EventData>) => {
     if (
       typeof data === "object" &&
@@ -45,10 +46,10 @@ export function wireEventsOnWorkerThread<EventData extends Record<number, unknow
     ) {
       const networkWorkerLatency = (Date.now() - data.posted) / 1000;
       metrics?.networkWorkerWireEventsOnWorkerThreadLatency.observe(
-        {eventName: eventNames[data.event]},
+        {eventName: networkEvents[data.event] as string},
         networkWorkerLatency
       );
-      events.emit(data.event, data.data);
+      events.emit(networkEvents[data.event], data.data);
     }
   });
 
@@ -58,7 +59,7 @@ export function wireEventsOnWorkerThread<EventData extends Record<number, unknow
       events.on(eventName, (data) => {
         const workerEvent: WorkerBridgeEvent<EventData> = {
           type: mainEventName,
-          event: eventName,
+          event: networkEvents.indexOf(eventName),
           posted: Date.now(),
           data,
         };
@@ -68,13 +69,14 @@ export function wireEventsOnWorkerThread<EventData extends Record<number, unknow
   }
 }
 
-export function wireEventsOnMainThread<EventData extends Record<number, unknown>>(
+export function wireEventsOnMainThread<EventData extends Record<string, unknown>>(
   mainEventName: NetworkWorkerThreadEventType,
   events: StrictEventEmitterSingleArg<EventData>,
   worker: Pick<Worker, "on" | "postMessage">,
   metrics: Metrics | null,
   isWorkerToMain: {[K in keyof EventData]: EventDirection}
 ): void {
+  const networkEvents = Object.keys(isWorkerToMain) as (keyof EventData)[];
   // Subscribe to events from main thread
   worker.on("message", (data: WorkerBridgeEvent<EventData>) => {
     if (
@@ -85,10 +87,10 @@ export function wireEventsOnMainThread<EventData extends Record<number, unknown>
     ) {
       const networkWorkerLatency = (Date.now() - data.posted) / 1000;
       metrics?.networkWorkerWireEventsOnMainThreadLatency.observe(
-        {eventName: data.event as string},
+        {eventName: networkEvents[data.event] as string},
         networkWorkerLatency
       );
-      events.emit(data.event, data.data);
+      events.emit(networkEvents[data.event], data.data);
     }
   });
 
@@ -98,7 +100,7 @@ export function wireEventsOnMainThread<EventData extends Record<number, unknown>
       events.on(eventName, (data) => {
         const workerEvent: WorkerBridgeEvent<EventData> = {
           type: mainEventName,
-          event: eventName,
+          event: networkEvents.indexOf(eventName),
           posted: Date.now(),
           data,
         };

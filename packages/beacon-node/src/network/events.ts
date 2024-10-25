@@ -11,20 +11,20 @@ import {PeerIndex} from "./gossip/index.js";
 
 export enum NetworkEvent {
   /** A relevant peer has connected or has been re-STATUS'd */
-  peerConnected = 0,
+  peerConnected = "peer-manager.peer-connected",
   /** A peer has been disconnected */
-  peerDisconnected = 1,
-  reqRespRequest = 2,
+  peerDisconnected = "peer-manager.peer-disconnected",
+  reqRespRequest = "req-resp.request",
   // TODO remove this event, this is not a network-level concern, rather a chain / sync concern
-  unknownBlockParent = 3,
-  unknownBlock = 4,
-  unknownBlockInput = 5,
-  newPeerIndex = 6,
+  unknownBlockParent = "unknownBlockParent",
+  unknownBlock = "unknownBlock",
+  unknownBlockInput = "unknownBlockInput",
+  newPeerIndex = "gossip.newPeerInde",
   // Network processor events
   /** (Network -> App) A gossip message is ready for validation */
-  pendingGossipsubMessage = 7,
+  pendingGossipsubMessage = "gossip.pendingGossipsubMessage",
   /** (App -> Network) A gossip message has been validated */
-  gossipMessageValidationResult = 8,
+  gossipMessageValidationResult = "gossip.messageValidationResult",
 }
 
 export type NetworkEventData = {
@@ -37,18 +37,6 @@ export type NetworkEventData = {
   [NetworkEvent.newPeerIndex]: ExchangePeerIdIndex;
   [NetworkEvent.pendingGossipsubMessage]: ExchangeGossipsubMessage;
   [NetworkEvent.gossipMessageValidationResult]: ExchangeGossipValidationResult;
-};
-
-export const NetworkEventNames: Record<NetworkEvent, string> = {
-  [NetworkEvent.peerConnected]: "peer-manager.peer-connected",
-  [NetworkEvent.peerDisconnected]: "peer-manager.peer-disconnected",
-  [NetworkEvent.reqRespRequest]: "req-resp.request",
-  [NetworkEvent.unknownBlockParent]: "unknownBlockParent",
-  [NetworkEvent.unknownBlock]: "unknownBlock",
-  [NetworkEvent.unknownBlockInput]: "unknownBlockInput",
-  [NetworkEvent.newPeerIndex]: "gossip.newPeerInde",
-  [NetworkEvent.pendingGossipsubMessage]: "gossip.pendingGossipsubMessage",
-  [NetworkEvent.gossipMessageValidationResult]: "gossip.messageValidationResult",
 };
 
 export const networkEventDirection: Record<NetworkEvent, EventDirection> = {
