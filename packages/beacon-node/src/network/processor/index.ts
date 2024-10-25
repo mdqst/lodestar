@@ -265,19 +265,28 @@ export class NetworkProcessor {
   }
 
   private onPendingGossipsubMessage(exchangeMessage: ExchangeGossipsubMessage): void {
-    // some properties are different between 2 types but we overwrite them right away
-    const message = exchangeMessage as unknown as PendingGossipsubMessage;
-    message.topic = this.gossipTopicCache.getTopicByIndex(exchangeMessage.topic);
-    const propagationSource = this.indexToPeerId.get(exchangeMessage.propagationSource);
+    const {msgId, msgData, meta} = exchangeMessage;
+    const [topicIndex, propagationSourceIndex, seenTimestampSec] = meta;
+    const topic = this.gossipTopicCache.getTopicByIndex(topicIndex);
+    const propagationSource = this.indexToPeerId.get(propagationSourceIndex);
     if (!propagationSource) {
       this.metrics?.networkProcessor.unknownPeerIndex.inc();
+      // TODO: monitor this
       this.logger.warn("Received gossip message from unknown peer", {
-        peerIndex: exchangeMessage.propagationSource,
-        topic: exchangeMessage.topic,
+        peerIndex: propagationSourceIndex,
+        topic: topic.type,
       });
       return;
     }
-    message.propagationSource = propagationSource;
+
+    const message: PendingGossipsubMessage = {
+      topic,
+      msgData,
+      msgId,
+      propagationSource,
+      seenTimestampSec,
+      startProcessUnixSec: null,
+    };
     const topicType = message.topic.type;
     const extractBlockSlotRootFn = this.extractBlockSlotRootFns[topicType];
     // check block root of Attestation and SignedAggregateAndProof messages

@@ -62,14 +62,13 @@ export type ExchangePeerIdIndex = {
 
 /**
  * The interface to exchange gossip messages from worker to main thread
- * TODO: make names shorter
+ * This should be as lightweight as possible because it's passed through thread boundary
  */
 export type ExchangeGossipsubMessage = {
-  topic: TopicIndex;
-  msgData: Uint8Array;
   msgId: string;
-  propagationSource: PeerIndex;
-  seenTimestampSec: number;
+  msgData: Uint8Array;
+  // topic, propagationSource, seenTimestampSec
+  meta: [TopicIndex, PeerIndex, number];
 };
 
 /**

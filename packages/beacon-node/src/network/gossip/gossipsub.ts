@@ -305,6 +305,7 @@ export class Eth2Gossipsub extends GossipSub {
 
     // Register full score too
     metrics.gossipPeer.score.set(gossipScores);
+    // TODO: monitor this
     metrics.gossipPeer.unknownPeerIndexCount.set(this.unknownPeerIndex);
   }
 
@@ -340,11 +341,9 @@ export class Eth2Gossipsub extends GossipSub {
 
       this.events.emit(NetworkEvent.pendingGossipsubMessage, {
         // send as minimal data as possible, network processor has its own topic cache to reconstruct the topic
-        topic: this.gossipTopicCache.getTopicIndex(msg.topic),
-        msgData: msg.data,
         msgId,
-        propagationSource: peerIdIndex,
-        seenTimestampSec,
+        msgData: msg.data,
+        meta: [this.gossipTopicCache.getTopicIndex(msg.topic), peerIdIndex, seenTimestampSec],
       });
     });
   }
