@@ -40,18 +40,19 @@ export function wireEventsOnWorkerThread<EventData extends Record<string, unknow
     const {meta} = data;
     if (meta) {
       const [type, eventIndex, postedAt] = meta;
+      const eventName = networkEvents[eventIndex];
       if (
         typeof data === "object" &&
         type === mainEventName &&
         // This check is not necessary but added for safety in case of improper implemented events
-        isWorkerToMain[eventIndex] === EventDirection.mainToWorker
+        isWorkerToMain[eventName] === EventDirection.mainToWorker
       ) {
         const networkWorkerLatency = (Date.now() - postedAt) / 1000;
         metrics?.networkWorkerWireEventsOnWorkerThreadLatency.observe(
-          {eventName: networkEvents[eventIndex] as string},
+          {eventName: eventName as string},
           networkWorkerLatency
         );
-        events.emit(networkEvents[eventIndex], data.data);
+        events.emit(eventName, data.data);
       }
     }
   });
@@ -83,18 +84,19 @@ export function wireEventsOnMainThread<EventData extends Record<string, unknown>
     const {meta} = data;
     if (meta) {
       const [type, eventIndex, postedAt] = meta;
+      const eventName = networkEvents[eventIndex];
       if (
         typeof data === "object" &&
         type === mainEventName &&
         // This check is not necessary but added for safety in case of improper implemented events
-        isWorkerToMain[eventIndex] === EventDirection.workerToMain
+        isWorkerToMain[eventName] === EventDirection.workerToMain
       ) {
         const networkWorkerLatency = (Date.now() - postedAt) / 1000;
         metrics?.networkWorkerWireEventsOnMainThreadLatency.observe(
-          {eventName: networkEvents[eventIndex] as string},
+          {eventName: eventName as string},
           networkWorkerLatency
         );
-        events.emit(networkEvents[eventIndex], data.data);
+        events.emit(eventName, data.data);
       }
     }
   });
