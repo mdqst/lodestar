@@ -163,7 +163,7 @@ export class NetworkProcessor {
   private readonly extractBlockSlotRootFns = createExtractBlockSlotRootFns();
   // we may not receive the block for Attestation and SignedAggregateAndProof messages, in that case PendingGossipsubMessage needs
   // to be stored in this Map and reprocessed once the block comes
-  private readonly awaitingGossipsubMessagesByRootBySlot: MapDef<Slot, MapDef<RootHex, Set<PendingGossipsubMessage>>>;
+  private readonly awaitingGossipsubMessagesAtCurrentSlot: PendingGossipsubMessage[];
   private unknownBlockGossipsubMessagesCount = 0;
   private isProcessingCurrentSlotBlock = false;
   private unknownRootsBySlot = new MapDef<Slot, Set<RootHex>>(() => new Set());
@@ -192,9 +192,7 @@ export class NetworkProcessor {
     this.chain.emitter.on(routes.events.EventType.block, this.onBlockProcessed.bind(this));
     this.chain.clock.on(ClockEvent.slot, this.onClockSlot.bind(this));
 
-    this.awaitingGossipsubMessagesByRootBySlot = new MapDef(
-      () => new MapDef<RootHex, Set<PendingGossipsubMessage>>(() => new Set())
-    );
+    this.awaitingGossipsubMessagesAtCurrentSlot = new Array<PendingGossipsubMessage>(MAX_QUEUED_UNKNOWN_BLOCK_GOSSIP_OBJECTS);
 
     // TODO: Implement queues and priorization for ReqResp incoming requests
     // Listens to NetworkEvent.reqRespIncomingRequest event
@@ -291,12 +289,11 @@ export class NetworkProcessor {
     const extractBlockSlotRootFn = this.extractBlockSlotRootFns[topicType];
     // check block root of Attestation and SignedAggregateAndProof messages
     if (extractBlockSlotRootFn) {
-      const slotRoot = extractBlockSlotRootFn(message.msgData);
+      const slot = extractBlockSlotRootFn(message.msgData);
       // if slotRoot is null, it means the msg.data is invalid
       // in that case message will be rejected when deserializing data in later phase (gossipValidatorFn)
-      if (slotRoot) {
+      if (slot !== null) {
         // DOS protection: avoid processing messages that are too old
-        const {slot, root} = slotRoot;
         const clockSlot = this.chain.clock.currentSlot;
         const {fork} = message.topic;
         let earliestPermissableSlot = clockSlot - DEFAULT_EARLIEST_PERMISSIBLE_SLOT_DISTANCE;
@@ -317,11 +314,9 @@ export class NetworkProcessor {
           this.isProcessingCurrentSlotBlock = true;
         }
         message.msgSlot = slot;
-        // check if we processed a block with this root
-        // no need to check if root is a descendant of the current finalized block, it will be checked once we validate the message if needed
-        if (root && !this.chain.forkChoice.hasBlockHexUnsafe(root)) {
-          this.searchUnknownSlotRoot({slot, root}, message.propagationSource.toString());
-
+        // if slot is in the future, let it fail in the gossipValidatorFn
+        // if slot is in the past, we don't need to queue
+        if (slot === clockSlot) {
           if (this.unknownBlockGossipsubMessagesCount > MAX_QUEUED_UNKNOWN_BLOCK_GOSSIP_OBJECTS) {
             // TODO: Should report the dropped job to gossip? It will be eventually pruned from the mcache
             this.metrics?.reprocessGossipAttestations.reject.inc({reason: ReprocessRejectReason.reached_limit});
@@ -329,12 +324,13 @@ export class NetworkProcessor {
           }
 
           this.metrics?.reprocessGossipAttestations.total.inc();
-          const awaitingGossipsubMessagesByRoot = this.awaitingGossipsubMessagesByRootBySlot.getOrDefault(slot);
-          const awaitingGossipsubMessages = awaitingGossipsubMessagesByRoot.getOrDefault(root);
-          awaitingGossipsubMessages.add(message);
+          this.awaitingGossipsubMessagesAtCurrentSlot[this.unknownBlockGossipsubMessagesCount] = message;
           this.unknownBlockGossipsubMessagesCount++;
-          return;
         }
+        // no need check if we processed a block with this root
+        // the reality is beacon node receives exactly 1 block per slot
+        // if we extract the root here for every message, it's very expensive in term of memory allocation
+        // we don't need to search for unknown root here, it's done when we receive blob messages in gossipHandlers
       }
     }
 
@@ -356,25 +352,21 @@ export class NetworkProcessor {
 
   private async onBlockProcessed({
     slot,
-    block: rootHex,
   }: {
     slot: Slot;
     block: string;
     executionOptimistic: boolean;
   }): Promise<void> {
     this.isProcessingCurrentSlotBlock = false;
-    const byRootGossipsubMessages = this.awaitingGossipsubMessagesByRootBySlot.getOrDefault(slot);
-    const waitingGossipsubMessages = byRootGossipsubMessages.getOrDefault(rootHex);
-    if (waitingGossipsubMessages.size === 0) {
+    if (slot !== this.chain.clock.currentSlot) {
       return;
     }
 
-    this.metrics?.reprocessGossipAttestations.resolve.inc(waitingGossipsubMessages.size);
+    this.metrics?.reprocessGossipAttestations.resolve.inc(this.unknownBlockGossipsubMessagesCount);
     const nowSec = Date.now() / 1000;
     let count = 0;
-    // TODO: we can group attestations to process in batches but since we have the SeenAttestationDatas
-    // cache, it may not be necessary at this time
-    for (const message of waitingGossipsubMessages) {
+    for (let i = 0; i < this.unknownBlockGossipsubMessagesCount; i++) {
+      const message = this.awaitingGossipsubMessagesAtCurrentSlot[i];
       this.metrics?.reprocessGossipAttestations.waitSecBeforeResolve.set(nowSec - message.seenTimestampSec);
       this.pushPendingGossipsubMessageToQueue(message);
       count++;
@@ -385,29 +377,25 @@ export class NetworkProcessor {
       }
     }
 
-    byRootGossipsubMessages.delete(rootHex);
+    this.unknownBlockGossipsubMessagesCount = 0;
+    // clear the array, don't want to reallocate it every time to save memory allocation
+    this.awaitingGossipsubMessagesAtCurrentSlot.fill(undefined as unknown as PendingGossipsubMessage);
   }
 
   private onClockSlot(clockSlot: Slot): void {
     this.isProcessingCurrentSlotBlock = false;
     const nowSec = Date.now() / 1000;
-    for (const [slot, gossipMessagesByRoot] of this.awaitingGossipsubMessagesByRootBySlot.entries()) {
-      if (slot < clockSlot) {
-        for (const gossipMessages of gossipMessagesByRoot.values()) {
-          for (const message of gossipMessages) {
-            this.metrics?.reprocessGossipAttestations.reject.inc({reason: ReprocessRejectReason.expired});
-            this.metrics?.reprocessGossipAttestations.waitSecBeforeReject.set(
-              {reason: ReprocessRejectReason.expired},
-              nowSec - message.seenTimestampSec
-            );
-            // TODO: Should report the dropped job to gossip? It will be eventually pruned from the mcache
-          }
-        }
-        this.awaitingGossipsubMessagesByRootBySlot.delete(slot);
-      }
+    for (let i = 0; i < this.unknownBlockGossipsubMessagesCount; i++) {
+      const message = this.awaitingGossipsubMessagesAtCurrentSlot[i];
+      this.metrics?.reprocessGossipAttestations.reject.inc({reason: ReprocessRejectReason.expired});
+      this.metrics?.reprocessGossipAttestations.waitSecBeforeReject.set(
+        {reason: ReprocessRejectReason.expired},
+        nowSec - message.seenTimestampSec
+      );
     }
-    pruneSetToMax(this.unknownRootsBySlot, MAX_UNKNOWN_ROOTS_SLOT_CACHE_SIZE);
     this.unknownBlockGossipsubMessagesCount = 0;
+    // clear the array, don't want to reallocate it every time to save memory allocation
+    this.awaitingGossipsubMessagesAtCurrentSlot.fill(undefined as unknown as PendingGossipsubMessage);
   }
 
   private executeWork(): void {

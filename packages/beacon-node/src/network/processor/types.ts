@@ -20,6 +20,6 @@ export type PendingGossipsubMessage = {
   queueAddedMs?: number;
 };
 
-export type ExtractSlotRootFns = {
-  [K in GossipType]?: (data: Uint8Array) => SlotOptionalRoot | null;
+export type ExtractSlotFns = {
+  [K in GossipType]?: (data: Uint8Array) => Slot | null;
 };
