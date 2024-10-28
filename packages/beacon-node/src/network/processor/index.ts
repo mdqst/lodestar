@@ -114,10 +114,6 @@ export enum ReprocessRejectReason {
  */
 export enum CannotAcceptWorkReason {
   /**
-   * Validating or processing gossip block at current slot.
-   */
-  processingCurrentSlotBlock = "processing_current_slot_block",
-  /**
    * bls is busy.
    */
   bls = "bls_busy",
@@ -163,9 +159,9 @@ export class NetworkProcessor {
   private readonly extractBlockSlotRootFns = createExtractBlockSlotRootFns();
   // we may not receive the block for Attestation and SignedAggregateAndProof messages, in that case PendingGossipsubMessage needs
   // to be stored in this Map and reprocessed once the block comes
-  private readonly awaitingGossipsubMessagesAtCurrentSlot: PendingGossipsubMessage[];
+  private readonly awaitingGossipsubMessagesAtCurrentSlot: ExchangeGossipsubMessage[];
   private unknownBlockGossipsubMessagesCount = 0;
-  private isProcessingCurrentSlotBlock = false;
+  private currentSlotBlockProcessed = false;
   private unknownRootsBySlot = new MapDef<Slot, Set<RootHex>>(() => new Set());
 
   constructor(
@@ -188,11 +184,11 @@ export class NetworkProcessor {
     );
 
     events.on(NetworkEvent.newPeerIndex, this.onNewPeerIndex.bind(this));
-    events.on(NetworkEvent.pendingGossipsubMessage, this.onPendingGossipsubMessage.bind(this));
+    events.on(NetworkEvent.pendingGossipsubMessage, this.onExchangeGossipsubMessage.bind(this));
     this.chain.emitter.on(routes.events.EventType.block, this.onBlockProcessed.bind(this));
     this.chain.clock.on(ClockEvent.slot, this.onClockSlot.bind(this));
 
-    this.awaitingGossipsubMessagesAtCurrentSlot = new Array<PendingGossipsubMessage>(MAX_QUEUED_UNKNOWN_BLOCK_GOSSIP_OBJECTS);
+    this.awaitingGossipsubMessagesAtCurrentSlot = new Array<ExchangeGossipsubMessage>(MAX_QUEUED_UNKNOWN_BLOCK_GOSSIP_OBJECTS);
 
     // TODO: Implement queues and priorization for ReqResp incoming requests
     // Listens to NetworkEvent.reqRespIncomingRequest event
@@ -220,7 +216,7 @@ export class NetworkProcessor {
 
   async stop(): Promise<void> {
     this.events.off(NetworkEvent.newPeerIndex, this.onNewPeerIndex);
-    this.events.off(NetworkEvent.pendingGossipsubMessage, this.onPendingGossipsubMessage);
+    this.events.off(NetworkEvent.pendingGossipsubMessage, this.onExchangeGossipsubMessage);
     this.chain.emitter.off(routes.events.EventType.block, this.onBlockProcessed);
     this.chain.emitter.off(ClockEvent.slot, this.onClockSlot);
   }
@@ -262,8 +258,8 @@ export class NetworkProcessor {
     this.indexToPeerId.set(peerIndex, peerId);
   }
 
-  private onPendingGossipsubMessage(exchangeMessage: ExchangeGossipsubMessage): void {
-    const {msgId, msgData, meta} = exchangeMessage;
+  private onExchangeGossipsubMessage(exchangeMessage: ExchangeGossipsubMessage): void {
+    const {msgData, meta} = exchangeMessage;
     const [topicIndex, propagationSourceIndex, seenTimestampSec] = meta;
     const topic = this.gossipTopicCache.getTopicByIndex(topicIndex);
     const propagationSource = this.indexToPeerId.get(propagationSourceIndex);
@@ -277,31 +273,24 @@ export class NetworkProcessor {
       return;
     }
 
-    const message: PendingGossipsubMessage = {
-      topic,
-      msgData,
-      msgId,
-      propagationSource,
-      seenTimestampSec,
-      startProcessUnixSec: null,
-    };
-    const topicType = message.topic.type;
+    const topicType = topic.type;
     const extractBlockSlotRootFn = this.extractBlockSlotRootFns[topicType];
+    let msgSlot: Slot | null | undefined = undefined;
     // check block root of Attestation and SignedAggregateAndProof messages
     if (extractBlockSlotRootFn) {
-      const slot = extractBlockSlotRootFn(message.msgData);
+      msgSlot = extractBlockSlotRootFn(msgData);
       // if slotRoot is null, it means the msg.data is invalid
       // in that case message will be rejected when deserializing data in later phase (gossipValidatorFn)
-      if (slot !== null) {
+      if (msgSlot !== null) {
         // DOS protection: avoid processing messages that are too old
         const clockSlot = this.chain.clock.currentSlot;
-        const {fork} = message.topic;
+        const {fork} = topic;
         let earliestPermissableSlot = clockSlot - DEFAULT_EARLIEST_PERMISSIBLE_SLOT_DISTANCE;
         if (ForkSeq[fork] >= ForkSeq.deneb && topicType === GossipType.beacon_attestation) {
           // post deneb, the attestations could be in current or previous epoch
           earliestPermissableSlot = computeStartSlotAtEpoch(this.chain.clock.currentEpoch - 1);
         }
-        if (slot < earliestPermissableSlot) {
+        if (msgSlot < earliestPermissableSlot) {
           // TODO: Should report the dropped job to gossip? It will be eventually pruned from the mcache
           this.metrics?.networkProcessor.gossipValidationError.inc({
             topic: topicType,
@@ -309,14 +298,9 @@ export class NetworkProcessor {
           });
           return;
         }
-        if (slot === clockSlot && (topicType === GossipType.beacon_block || topicType === GossipType.blob_sidecar)) {
-          // in the worse case if the current slot block is not valid, this will be reset in the next slot
-          this.isProcessingCurrentSlotBlock = true;
-        }
-        message.msgSlot = slot;
         // if slot is in the future, let it fail in the gossipValidatorFn
         // if slot is in the past, we don't need to queue
-        if (slot === clockSlot) {
+        if (msgSlot === clockSlot && !this.currentSlotBlockProcessed) {
           if (this.unknownBlockGossipsubMessagesCount > MAX_QUEUED_UNKNOWN_BLOCK_GOSSIP_OBJECTS) {
             // TODO: Should report the dropped job to gossip? It will be eventually pruned from the mcache
             this.metrics?.reprocessGossipAttestations.reject.inc({reason: ReprocessRejectReason.reached_limit});
@@ -324,7 +308,7 @@ export class NetworkProcessor {
           }
 
           this.metrics?.reprocessGossipAttestations.total.inc();
-          this.awaitingGossipsubMessagesAtCurrentSlot[this.unknownBlockGossipsubMessagesCount] = message;
+          this.awaitingGossipsubMessagesAtCurrentSlot[this.unknownBlockGossipsubMessagesCount] = exchangeMessage;
           this.unknownBlockGossipsubMessagesCount++;
         }
         // no need check if we processed a block with this root
@@ -335,10 +319,28 @@ export class NetworkProcessor {
     }
 
     // bypass the check for other messages
-    this.pushPendingGossipsubMessageToQueue(message);
+    this.pushPendingGossipsubMessageToQueue(exchangeMessage, msgSlot ?? undefined);
   }
 
-  private pushPendingGossipsubMessageToQueue(message: PendingGossipsubMessage): void {
+  private pushPendingGossipsubMessageToQueue(exchangeMessage: ExchangeGossipsubMessage, msgSlot?: Slot): void {
+    const {msgId, msgData, meta} = exchangeMessage;
+    const [topicIndex, propagationSourceIndex, seenTimestampSec] = meta;
+    const topic = this.gossipTopicCache.getTopicByIndex(topicIndex);
+    const propagationSource = this.indexToPeerId.get(propagationSourceIndex);
+    if (!propagationSource) {
+      // should not happen, validated in onExchangeGossipsubMessage
+      throw Error(`propagationSource ${propagationSourceIndex} not found`);
+    }
+
+    const message: PendingGossipsubMessage = {
+      topic,
+      msgData,
+      msgId,
+      propagationSource,
+      seenTimestampSec,
+      startProcessUnixSec: null,
+      msgSlot,
+    };
     const topicType = message.topic.type;
     const droppedCount = this.gossipQueues[topicType].add(message);
     if (droppedCount) {
@@ -357,18 +359,19 @@ export class NetworkProcessor {
     block: string;
     executionOptimistic: boolean;
   }): Promise<void> {
-    this.isProcessingCurrentSlotBlock = false;
     if (slot !== this.chain.clock.currentSlot) {
       return;
     }
+    this.currentSlotBlockProcessed = true;
 
     this.metrics?.reprocessGossipAttestations.resolve.inc(this.unknownBlockGossipsubMessagesCount);
     const nowSec = Date.now() / 1000;
     let count = 0;
     for (let i = 0; i < this.unknownBlockGossipsubMessagesCount; i++) {
       const message = this.awaitingGossipsubMessagesAtCurrentSlot[i];
-      this.metrics?.reprocessGossipAttestations.waitSecBeforeResolve.set(nowSec - message.seenTimestampSec);
-      this.pushPendingGossipsubMessageToQueue(message);
+      const [_, __, seenTimestampSec] = message.meta;
+      this.metrics?.reprocessGossipAttestations.waitSecBeforeResolve.set(nowSec - seenTimestampSec);
+      this.pushPendingGossipsubMessageToQueue(message, slot);
       count++;
       // don't want to block the event loop, worse case it'd wait for 16_084 / 1024 * 50ms = 800ms which is not a big deal
       if (count === MAX_UNKNOWN_BLOCK_GOSSIP_OBJECTS_PER_TICK) {
@@ -379,23 +382,24 @@ export class NetworkProcessor {
 
     this.unknownBlockGossipsubMessagesCount = 0;
     // clear the array, don't want to reallocate it every time to save memory allocation
-    this.awaitingGossipsubMessagesAtCurrentSlot.fill(undefined as unknown as PendingGossipsubMessage);
+    this.awaitingGossipsubMessagesAtCurrentSlot.fill(undefined as unknown as ExchangeGossipsubMessage);
   }
 
   private onClockSlot(clockSlot: Slot): void {
-    this.isProcessingCurrentSlotBlock = false;
+    this.currentSlotBlockProcessed = false;
     const nowSec = Date.now() / 1000;
     for (let i = 0; i < this.unknownBlockGossipsubMessagesCount; i++) {
       const message = this.awaitingGossipsubMessagesAtCurrentSlot[i];
+      const [_, __, seenTimestampSec] = message.meta;
       this.metrics?.reprocessGossipAttestations.reject.inc({reason: ReprocessRejectReason.expired});
       this.metrics?.reprocessGossipAttestations.waitSecBeforeReject.set(
         {reason: ReprocessRejectReason.expired},
-        nowSec - message.seenTimestampSec
+        nowSec - seenTimestampSec
       );
     }
     this.unknownBlockGossipsubMessagesCount = 0;
     // clear the array, don't want to reallocate it every time to save memory allocation
-    this.awaitingGossipsubMessagesAtCurrentSlot.fill(undefined as unknown as PendingGossipsubMessage);
+    this.awaitingGossipsubMessagesAtCurrentSlot.fill(undefined as unknown as ExchangeGossipsubMessage);
   }
 
   private executeWork(): void {
@@ -534,10 +538,6 @@ export class NetworkProcessor {
    * Return null if chain can accept work, otherwise return the reason why it cannot accept work
    */
   private checkAcceptWork(): null | CannotAcceptWorkReason {
-    if (this.isProcessingCurrentSlotBlock) {
-      return CannotAcceptWorkReason.processingCurrentSlotBlock;
-    }
-
     if (!this.chain.blsThreadPoolCanAcceptWork()) {
       return CannotAcceptWorkReason.bls;
     }
