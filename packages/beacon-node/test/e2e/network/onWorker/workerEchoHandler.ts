@@ -1,8 +1,10 @@
-import workerThreads from "node:worker_threads";
+import workerThreads, {TransferListItem} from "node:worker_threads";
 import {spawn, Worker} from "@chainsafe/threads";
 
 export type EchoWorker = {
   send<T>(data: T): Promise<T>;
+  send2<T extends {data: Uint8Array}>(data: T, transferList?: readonly TransferListItem[]): Promise<number>;
+  sendUint8Array(data: Uint8Array, transferList?: readonly TransferListItem[]): Promise<number>;
   close(): Promise<void>;
 };
 
@@ -24,6 +26,24 @@ export async function getEchoWorker(): Promise<EchoWorker> {
         worker.once("messageerror", reject);
         worker.once("error", reject);
         worker.postMessage(data);
+      });
+    },
+
+    send2<T>(data: T, transferList?: readonly TransferListItem[]): Promise<number> {
+      return new Promise((resolve, reject) => {
+        worker.once("message", (data) => resolve(data));
+        worker.once("messageerror", reject);
+        worker.once("error", reject);
+        worker.postMessage(data, transferList);
+      });
+    },
+
+    sendUint8Array(data: Uint8Array, transferList?: readonly TransferListItem[]): Promise<number> {
+      return new Promise((resolve, reject) => {
+        worker.once("message", (data: number) => resolve(data));
+        worker.once("messageerror", reject);
+        worker.once("error", reject);
+        worker.postMessage(data, transferList);
       });
     },
 

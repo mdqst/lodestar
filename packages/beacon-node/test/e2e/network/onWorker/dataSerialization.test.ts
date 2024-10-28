@@ -1,4 +1,5 @@
-import {describe, it, beforeAll, afterAll, expect} from "vitest";
+// import {describe, it, beforeAll, afterAll, expect} from "vitest";
+import {expect} from "chai";
 import {TopicValidatorResult} from "@libp2p/interface";
 import {BitArray} from "@chainsafe/ssz";
 import {ssz} from "@lodestar/types";
@@ -28,16 +29,17 @@ import {NetworkWorkerApi} from "../../../../src/network/core/index.js";
 import {EventDirection} from "../../../../src/util/workerEvents.js";
 import {CommitteeSubscription} from "../../../../src/network/subnets/interface.js";
 import {EchoWorker, getEchoWorker} from "./workerEchoHandler.js";
+import {Uint8} from "@lodestar/types/lib/sszTypes.js";
 
 // TODO: Need to find the way to load the echoWorker in the test environment
-describe.skip("data serialization through worker boundary", () => {
+describe("data serialization through worker boundary", () => {
   let echoWorker: EchoWorker;
 
-  beforeAll(async () => {
+  before(async () => {
     echoWorker = await getEchoWorker();
   });
 
-  afterAll(async () => {
+  after(async () => {
     // Guard against before() erroring
     if (echoWorker != null) await echoWorker.close();
   });
@@ -247,6 +249,23 @@ describe.skip("data serialization through worker boundary", () => {
       }
     });
   }
+
+  it("transfer ownership of ArrayBuffer", async () => {
+    const data = new Uint8Array([1, 2, 3, 4]);
+    const transferList = [data.buffer];
+    const numBytes = await echoWorker.sendUint8Array(data, transferList);
+    expect(data.length).to.equal(0);
+    expect(numBytes).to.equal(4);
+  });
+
+  it.only("transfer ownership with object", async () => {
+    const data = new Uint8Array([1, 2, 3, 4]);
+    const message = {name: "twoEths", data};
+    const transferList = [data.buffer];
+    const numBytes = await echoWorker.send2(message, transferList);
+    expect(data.length).to.equal(0);
+    expect(numBytes).to.equal(4);
+  });
 });
 
 type Resolves<T extends Promise<unknown>> = T extends Promise<infer U> ? (U extends void ? null : U) : never;
