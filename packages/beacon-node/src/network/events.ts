@@ -1,6 +1,6 @@
 import {EventEmitter} from "node:events";
 import {PeerId} from "@libp2p/interface";
-import {phase0, RootHex} from "@lodestar/types";
+import {phase0, RootHex, Slot} from "@lodestar/types";
 import {BlockInput, NullBlockInput} from "../chain/blocks/types.js";
 import {StrictEventEmitterSingleArg} from "../util/strictEvents.js";
 import {PeerIdStr} from "../util/peerId.js";
@@ -25,6 +25,7 @@ export enum NetworkEvent {
   pendingGossipsubMessage = "gossip.pendingGossipsubMessage",
   /** (App -> Network) A gossip message has been validated */
   gossipMessageValidationResult = "gossip.messageValidationResult",
+  blockProcessed = "blockProcessed",
 }
 
 export type NetworkEventData = {
@@ -37,6 +38,7 @@ export type NetworkEventData = {
   [NetworkEvent.newPeerIndex]: ExchangePeerIdIndex;
   [NetworkEvent.pendingGossipsubMessage]: ExchangeGossipsubMessage;
   [NetworkEvent.gossipMessageValidationResult]: ExchangeGossipValidationResult;
+  [NetworkEvent.blockProcessed]: {slot: Slot; rootHex: RootHex};
 };
 
 export const networkEventDirection: Record<NetworkEvent, EventDirection> = {
@@ -49,6 +51,7 @@ export const networkEventDirection: Record<NetworkEvent, EventDirection> = {
   [NetworkEvent.newPeerIndex]: EventDirection.workerToMain,
   [NetworkEvent.pendingGossipsubMessage]: EventDirection.workerToMain,
   [NetworkEvent.gossipMessageValidationResult]: EventDirection.mainToWorker,
+  [NetworkEvent.blockProcessed]: EventDirection.mainToWorker,
 };
 
 export type INetworkEventBus = StrictEventEmitterSingleArg<NetworkEventData>;
