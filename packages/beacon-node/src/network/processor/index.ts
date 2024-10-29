@@ -160,6 +160,7 @@ export class NetworkProcessor {
   private readonly awaitingGossipsubMessagesByRootBySlot: MapDef<Slot, MapDef<RootHex, Set<PendingGossipsubMessage>>>;
   private unknownBlockGossipsubMessagesCount = 0;
   private isProcessingCurrentSlotBlock = false;
+  private receivedGossipBlock = false;
   private unknownRootsBySlot = new MapDef<Slot, Set<RootHex>>(() => new Set());
 
   constructor(
@@ -247,7 +248,8 @@ export class NetworkProcessor {
     const extractBlockSlotRootFn = this.extractBlockSlotRootFns[topicType];
     // check block root of Attestation and SignedAggregateAndProof messages
     if (extractBlockSlotRootFn) {
-      const slotRoot = extractBlockSlotRootFn(message.msg.data);
+      const extractRoot = !this.receivedGossipBlock;
+      const slotRoot = extractBlockSlotRootFn(message.msg.data, extractRoot);
       // if slotRoot is null, it means the msg.data is invalid
       // in that case message will be rejected when deserializing data in later phase (gossipValidatorFn)
       if (slotRoot) {
@@ -319,6 +321,9 @@ export class NetworkProcessor {
     executionOptimistic: boolean;
   }): Promise<void> {
     this.isProcessingCurrentSlotBlock = false;
+    if (slot === this.chain.clock.currentSlot) {
+      this.receivedGossipBlock = true;
+    }
     const byRootGossipsubMessages = this.awaitingGossipsubMessagesByRootBySlot.getOrDefault(slot);
     const waitingGossipsubMessages = byRootGossipsubMessages.getOrDefault(rootHex);
     if (waitingGossipsubMessages.size === 0) {
@@ -346,6 +351,7 @@ export class NetworkProcessor {
 
   private onClockSlot(clockSlot: Slot): void {
     this.isProcessingCurrentSlotBlock = false;
+    this.receivedGossipBlock = false;
     const nowSec = Date.now() / 1000;
     for (const [slot, gossipMessagesByRoot] of this.awaitingGossipsubMessagesByRootBySlot.entries()) {
       if (slot < clockSlot) {

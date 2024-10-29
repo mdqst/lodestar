@@ -22,5 +22,5 @@ export type PendingGossipsubMessage = {
 };
 
 export type ExtractSlotRootFns = {
-  [K in GossipType]?: (data: Uint8Array) => SlotOptionalRoot | null;
+  [K in GossipType]?: (data: Uint8Array, extractRoot: boolean) => SlotOptionalRoot | null;
 };
