@@ -105,7 +105,12 @@ export class AttestationPool {
    * - Valid committeeIndex
    * - Valid data
    */
-  add(committeeIndex: CommitteeIndex, attestation: Attestation, attDataRootHex: RootHex): InsertOutcome {
+  add(
+    committeeIndex: CommitteeIndex,
+    participationIndex: number,
+    attestation: Attestation,
+    attDataRootHex: RootHex
+  ): InsertOutcome {
     const slot = attestation.data.slot;
     const fork = this.config.getForkName(slot);
     const lowestPermissibleSlot = this.lowestPermissibleSlot;
@@ -144,7 +149,7 @@ export class AttestationPool {
     const aggregate = aggregateByIndex.get(committeeIndex);
     if (aggregate) {
       // Aggregate mutating
-      return aggregateAttestationInto(aggregate, attestation);
+      return aggregateAttestationInto(aggregate, attestation, participationIndex);
     }
     // Create new aggregate
     aggregateByIndex.set(committeeIndex, attestationToAggregate(attestation));
@@ -216,9 +221,7 @@ export class AttestationPool {
 /**
  * Aggregate a new attestation into `aggregate` mutating it
  */
-function aggregateAttestationInto(aggregate: AggregateFast, attestation: Attestation): InsertOutcome {
-  const bitIndex = attestation.aggregationBits.getSingleTrueBit();
-
+function aggregateAttestationInto(aggregate: AggregateFast, attestation: Attestation, bitIndex: number): InsertOutcome {
   // Should never happen, attestations are verified against this exact condition before
   assert.notNull(bitIndex, "Invalid attestation in pool, not exactly one bit set");
 

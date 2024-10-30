@@ -633,14 +633,20 @@ function getBatchHandlers(modules: ValidatorFnsModules, options: GossipHandlerOp
         results.push(null);
 
         // Handler
-        const {indexedAttestation, attDataRootHex, attestation, committeeIndex} = validationResult.result;
+        const {indexedAttestation, attDataRootHex, attestation, committeeIndex, participationIndex} =
+          validationResult.result;
         metrics?.registerGossipUnaggregatedAttestation(gossipHandlerParams[i].seenTimestampSec, indexedAttestation);
 
         try {
           // Node may be subscribe to extra subnets (long-lived random subnets). For those, validate the messages
           // but don't add to attestation pool, to save CPU and RAM
           if (aggregatorTracker.shouldAggregate(subnet, indexedAttestation.data.slot)) {
-            const insertOutcome = chain.attestationPool.add(committeeIndex, attestation, attDataRootHex);
+            const insertOutcome = chain.attestationPool.add(
+              committeeIndex,
+              participationIndex,
+              attestation,
+              attDataRootHex
+            );
             metrics?.opPool.attestationPoolInsertOutcome.inc({insertOutcome});
           }
         } catch (e) {
