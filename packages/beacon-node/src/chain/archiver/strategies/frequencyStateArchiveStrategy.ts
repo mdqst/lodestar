@@ -31,7 +31,10 @@ export class FrequencyStateArchiveStrategy implements StateArchiveStrategy {
     private readonly bufferPool?: BufferPool | null
   ) {}
 
-  async onFinalizedCheckpoint(_finalized: CheckpointWithHex, _metrics?: Metrics | null): Promise<void> {}
+  async onFinalizedCheckpoint(finalized: CheckpointWithHex, metrics?: Metrics | null): Promise<void> {
+    await this.maybeArchiveState(finalized, metrics);
+  }
+
   async onCheckpoint(_stateRoot: RootHex, _metrics?: Metrics | null): Promise<void> {}
 
   /**

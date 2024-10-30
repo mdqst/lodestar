@@ -86,11 +86,11 @@ export class Archiver {
     return this.statesArchiverStrategy.maybeArchiveState(this.chain.forkChoice.getFinalizedCheckpoint());
   }
 
-  private onFinalizedCheckpoint = async (finalized: CheckpointWithHex): Promise<void> => {
+  private async onFinalizedCheckpoint(finalized: CheckpointWithHex): Promise<void> {
     return this.jobQueue.push(finalized);
-  };
+  }
 
-  private onCheckpoint = (): void => {
+  private onCheckpoint(): void {
     const headStateRoot = this.chain.forkChoice.getHead().stateRoot;
     this.chain.regen.pruneOnCheckpoint(
       this.chain.forkChoice.getFinalizedCheckpoint().epoch,
@@ -101,7 +101,7 @@ export class Archiver {
     this.statesArchiverStrategy.onCheckpoint(headStateRoot, this.metrics).catch((err) => {
       this.logger.error("Error during state archive", {stateArchiveMode: this.stateArchiveMode}, err);
     });
-  };
+  }
 
   private processFinalizedCheckpoint = async (finalized: CheckpointWithHex): Promise<void> => {
     try {
@@ -120,9 +120,6 @@ export class Archiver {
       this.prevFinalized = finalized;
 
       await this.statesArchiverStrategy.onFinalizedCheckpoint(finalized, this.metrics);
-
-      // should be after ArchiveBlocksTask to handle restart cleanly
-      await this.statesArchiverStrategy.maybeArchiveState(finalized, this.metrics);
 
       this.chain.regen.pruneOnFinalized(finalizedEpoch);
 
