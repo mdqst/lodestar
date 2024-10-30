@@ -248,6 +248,8 @@ export class NetworkProcessor {
     const extractBlockSlotRootFn = this.extractBlockSlotRootFns[topicType];
     // check block root of Attestation and SignedAggregateAndProof messages
     if (extractBlockSlotRootFn) {
+      // only extract roots for early gossip messages
+      // see https://github.com/ChainSafe/lodestar/issues/7205
       const extractRoot = !this.receivedGossipBlock;
       const slotRoot = extractBlockSlotRootFn(message.msg.data, extractRoot);
       // if slotRoot is null, it means the msg.data is invalid
