@@ -317,6 +317,7 @@ export class Validator {
     const {useProduceBlockV3, broadcastValidation = defaultOptions.broadcastValidation, valProposerConfig} = opts;
     const defaultBuilderSelection =
       valProposerConfig?.defaultConfig.builder?.selection ?? defaultOptions.builderSelection;
+    const defaultGraffiti = valProposerConfig?.defaultConfig.graffiti;
     const strictFeeRecipientCheck = valProposerConfig?.defaultConfig.strictFeeRecipientCheck ?? false;
     const suggestedFeeRecipient = valProposerConfig?.defaultConfig.feeRecipient ?? defaultOptions.suggestedFeeRecipient;
 
@@ -325,6 +326,7 @@ export class Validator {
       useProduceBlockV3: useProduceBlockV3 === undefined ? "deneb+" : useProduceBlockV3,
       broadcastValidation,
       defaultBuilderSelection,
+      defaultGraffiti,
       suggestedFeeRecipient,
       strictFeeRecipientCheck,
     });
