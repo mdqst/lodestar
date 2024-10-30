@@ -22,8 +22,6 @@ import {ethereumConsensusSpecsTests} from "../specTestVersioning.js";
 // The aim of the genesis tests is to provide a baseline to test genesis-state initialization and test if the
 // proposed genesis-validity conditions are working.
 
-/* eslint-disable @typescript-eslint/naming-convention */
-
 const genesis: TestRunnerFn<any, any> = (fork, testName, testSuite) => {
   const testFn = genesisTestFns[testName];
   if (testFn === undefined) {
@@ -60,9 +58,7 @@ const genesisInitialization: TestRunnerFn<GenesisInitSpecTest, BeaconStateAllFor
         deposits,
         undefined,
         testcase["execution_payload_header"] &&
-          executionPayloadHeaderType.toViewDU(
-            testcase["execution_payload_header"] as ExecutionPayloadHeader<ForkName.deneb>
-          )
+          executionPayloadHeaderType.toViewDU(testcase["execution_payload_header"])
       );
     },
     // eth1.yaml
@@ -88,7 +84,7 @@ const genesisInitialization: TestRunnerFn<GenesisInitSpecTest, BeaconStateAllFor
       },
       timeout: 60000,
       getExpected: (testCase) => testCase.state,
-      expectFunc: (testCase, expected, actual) => {
+      expectFunc: (_testCase, expected, actual) => {
         expectEqualBeaconState(fork, expected, actual);
       },
       // Do not manually skip tests here, do it in packages/beacon-node/test/spec/presets/index.test.ts
@@ -110,7 +106,7 @@ const genesisValidity: TestRunnerFn<GenesisValidityTestCase, boolean> = (fork) =
         genesis: ssz[fork].BeaconState,
       },
       getExpected: (testCase) => testCase.is_valid,
-      expectFunc: (testCase, expected, actual) => {
+      expectFunc: (_testCase, expected, actual) => {
         expect(actual).toEqualWithMessage(expected, "isValidGenesisState is not" + expected);
       },
     },

@@ -1,5 +1,5 @@
 import path from "node:path";
-import {describe, it, expect, beforeAll, vi, afterAll, beforeEach, afterEach} from "vitest";
+import {describe, it, expect, beforeAll, vi, onTestFinished} from "vitest";
 import {rimraf} from "rimraf";
 import {DeletionStatus, getClient, ImportStatus} from "@lodestar/api/keymanager";
 import {config} from "@lodestar/config/default";
@@ -12,7 +12,7 @@ import {cachedPubkeysHex, cachedSeckeysHex} from "../utils/cachedKeys.js";
 import {expectDeepEquals} from "../utils/runUtils.js";
 import {expectKeys, startValidatorWithKeyManager} from "../utils/validator.js";
 
-describe("import keystores from api", function () {
+describe("import keystores from api", () => {
   vi.setConfig({testTimeout: 30_000});
 
   const dataDir = path.join(testFilesDir, "import-keystores-test");
@@ -30,7 +30,6 @@ describe("import keystores from api", function () {
 
   const genesisValidatorsRoot = "0x0000000000000000000000000000000000000000000000000000000000000000";
   const slashingProtection: Interchange = {
-    /* eslint-disable @typescript-eslint/naming-convention */
     metadata: {
       interchange_format_version: "5",
       genesis_validators_root: genesisValidatorsRoot,
@@ -55,7 +54,11 @@ describe("import keystores from api", function () {
   const slashingProtectionStr = JSON.stringify(slashingProtection);
 
   it("run 'validator' and import remote keys from API", async () => {
-    const {keymanagerClient} = await startValidatorWithKeyManager([], {dataDir});
+    const {keymanagerClient, stopValidator} = await startValidatorWithKeyManager([], {dataDir});
+    onTestFinished(async () => {
+      await stopValidator();
+    });
+
     // Produce and encrypt keystores
     const keystoresStr = await getKeystoresStr(passphrase, secretKeys);
 
@@ -92,7 +95,6 @@ describe("import keystores from api", function () {
     // Attempt to run a second process and expect the keystore lock to throw
     const validator = await spawnCliCommand("packages/cli/bin/lodestar.js", ["validator", "--dataDir", dataDir], {
       logPrefix: "vc-2",
-      testContext: {beforeEach, afterEach, afterAll},
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -116,9 +118,11 @@ describe("import keystores from api", function () {
     });
   });
 
-  it("run 'validator' check keys are loaded + delete", async function () {
-    const {keymanagerClient} = await startValidatorWithKeyManager([], {dataDir});
-
+  it("run 'validator' check keys are loaded + delete", async () => {
+    const {keymanagerClient, stopValidator} = await startValidatorWithKeyManager([], {dataDir});
+    onTestFinished(async () => {
+      await stopValidator();
+    });
     // Check that keys imported in previous it() are still there
     await expectKeys(keymanagerClient, pubkeys, "Wrong listKeys before deleting");
 
@@ -134,14 +138,21 @@ describe("import keystores from api", function () {
     await expectKeys(keymanagerClient, [], "Wrong listKeys after deleting");
   });
 
-  it("different process check no keys are loaded", async function () {
-    const {keymanagerClient} = await startValidatorWithKeyManager([], {dataDir});
+  it("different process check no keys are loaded", async () => {
+    const {keymanagerClient, stopValidator} = await startValidatorWithKeyManager([], {dataDir});
+    onTestFinished(async () => {
+      await stopValidator();
+    });
+
     // After deleting there should be no keys
     await expectKeys(keymanagerClient, [], "Wrong listKeys");
   });
 
-  it("reject calls without bearerToken", async function () {
-    await startValidatorWithKeyManager([], {dataDir});
+  it("reject calls without bearerToken", async () => {
+    const {stopValidator} = await startValidatorWithKeyManager([], {dataDir});
+    onTestFinished(async () => {
+      await stopValidator();
+    });
 
     const keymanagerClientNoAuth = getClient(
       {baseUrl: "http://localhost:38011", globalInit: {bearerToken: undefined}},

@@ -249,13 +249,21 @@ export class PeerDiscovery {
     }
 
     // Run a discv5 subnet query to try to discover new peers
-    if (subnetsToDiscoverPeers.length > 0 || cachedENRsToDial.size < peersToConnect) {
+    const shouldRunFindRandomNodeQuery = subnetsToDiscoverPeers.length > 0 || cachedENRsToDial.size < peersToConnect;
+    if (shouldRunFindRandomNodeQuery) {
       void this.runFindRandomNodeQuery();
     }
+
+    this.logger.debug("Discover peers outcome", {
+      peersToConnect,
+      peersAvailableToDial: cachedENRsToDial.size,
+      subnetsToDiscover: subnetsToDiscoverPeers.length,
+      shouldRunFindRandomNodeQuery,
+    });
   }
 
   /**
-   * Request to find peers. First, looked at cached peers in peerStore
+   * Request discv5 to find peers if there is no query in progress
    */
   private async runFindRandomNodeQuery(): Promise<void> {
     // Delay the 1st query after starting discv5
@@ -269,9 +277,8 @@ export class PeerDiscovery {
     if (this.randomNodeQuery.code === QueryStatusCode.Active) {
       this.metrics?.discovery.findNodeQueryRequests.inc({action: "ignore"});
       return;
-    } else {
-      this.metrics?.discovery.findNodeQueryRequests.inc({action: "start"});
     }
+    this.metrics?.discovery.findNodeQueryRequests.inc({action: "start"});
 
     // Use async version to prevent blocking the event loop
     // Time to completion of this function is not critical, in case this async call add extra lag
@@ -296,7 +303,6 @@ export class PeerDiscovery {
     const {id, multiaddrs} = evt.detail;
 
     // libp2p may send us PeerInfos without multiaddrs https://github.com/libp2p/js-libp2p/issues/1873
-    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
     if (!multiaddrs || multiaddrs.length === 0) {
       this.metrics?.discovery.discoveredStatus.inc({status: DiscoveredPeerStatus.no_multiaddrs});
       return;
@@ -305,6 +311,7 @@ export class PeerDiscovery {
     const attnets = zeroAttnets;
     const syncnets = zeroSyncnets;
     const status = this.handleDiscoveredPeer(id, multiaddrs[0], attnets, syncnets);
+    this.logger.debug("Discovered peer via libp2p", {peer: prettyPrintPeerId(id), status});
     this.metrics?.discovery.discoveredStatus.inc({status});
   };
 
@@ -336,6 +343,7 @@ export class PeerDiscovery {
     const syncnets = syncnetsBytes ? deserializeEnrSubnets(syncnetsBytes, SYNC_COMMITTEE_SUBNET_COUNT) : zeroSyncnets;
 
     const status = this.handleDiscoveredPeer(peerId, multiaddrTCP, attnets, syncnets);
+    this.logger.debug("Discovered peer via discv5", {peer: prettyPrintPeerId(peerId), status});
     this.metrics?.discovery.discoveredStatus.inc({status});
   };
 
@@ -363,7 +371,7 @@ export class PeerDiscovery {
       if (
         this.libp2p.services.components.connectionManager
           .getDialQueue()
-          .find((pendingDial) => pendingDial.peerId && pendingDial.peerId.equals(peerId))
+          .find((pendingDial) => pendingDial.peerId?.equals(peerId))
       ) {
         return DiscoveredPeerStatus.already_dialing;
       }
@@ -380,13 +388,13 @@ export class PeerDiscovery {
       if (this.shouldDialPeer(cachedPeer)) {
         void this.dialPeer(cachedPeer);
         return DiscoveredPeerStatus.attempt_dial;
-      } else {
-        // Add to pending good peers with a last seen time
-        this.cachedENRs.set(peerId.toString(), cachedPeer);
-        const dropped = pruneSetToMax(this.cachedENRs, MAX_CACHED_ENRS);
-        // If the cache was already full, count the peer as dropped
-        return dropped > 0 ? DiscoveredPeerStatus.dropped : DiscoveredPeerStatus.cached;
       }
+
+      // Add to pending good peers with a last seen time
+      this.cachedENRs.set(peerId.toString(), cachedPeer);
+      const dropped = pruneSetToMax(this.cachedENRs, MAX_CACHED_ENRS);
+      // If the cache was already full, count the peer as dropped
+      return dropped > 0 ? DiscoveredPeerStatus.dropped : DiscoveredPeerStatus.cached;
     } catch (e) {
       this.logger.error("Error onDiscovered", {}, e as Error);
       return DiscoveredPeerStatus.error;
@@ -464,7 +472,7 @@ export class PeerDiscovery {
   /** Check if there is 1+ open connection with this peer */
   private isPeerConnected(peerIdStr: PeerIdStr): boolean {
     const connections = getConnectionsMap(this.libp2p).get(peerIdStr);
-    return Boolean(connections && connections.some((connection) => connection.status === "open"));
+    return Boolean(connections?.some((connection) => connection.status === "open"));
   }
 }
 

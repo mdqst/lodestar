@@ -27,26 +27,25 @@ describe("epoch shufflings", () => {
   itBench({
     id: `computeProposers - vc ${numValidators}`,
     fn: () => {
-      const epochSeed = getSeed(state, state.epochCtx.nextShuffling.epoch, DOMAIN_BEACON_PROPOSER);
-      computeProposers(epochSeed, state.epochCtx.nextShuffling, state.epochCtx.effectiveBalanceIncrements);
+      const epochSeed = getSeed(state, state.epochCtx.epoch, DOMAIN_BEACON_PROPOSER);
+      const fork = state.config.getForkSeq(state.slot);
+      computeProposers(fork, epochSeed, state.epochCtx.currentShuffling, state.epochCtx.effectiveBalanceIncrements);
     },
   });
 
   itBench({
     id: `computeEpochShuffling - vc ${numValidators}`,
     fn: () => {
-      computeEpochShuffling(state, state.epochCtx.nextShuffling.activeIndices, nextEpoch);
+      const {nextActiveIndices} = state.epochCtx;
+      computeEpochShuffling(state, nextActiveIndices, nextEpoch);
     },
   });
 
   itBench({
     id: `getNextSyncCommittee - vc ${numValidators}`,
     fn: () => {
-      getNextSyncCommittee(
-        state,
-        state.epochCtx.nextShuffling.activeIndices,
-        state.epochCtx.effectiveBalanceIncrements
-      );
+      const fork = state.config.getForkSeq(state.slot);
+      getNextSyncCommittee(fork, state, state.epochCtx.nextActiveIndices, state.epochCtx.effectiveBalanceIncrements);
     },
   });
 });

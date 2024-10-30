@@ -1,5 +1,5 @@
 export function isValidHttpUrl(urlStr: string): boolean {
-  let url;
+  let url: URL;
   try {
     url = new URL(urlStr);
 
@@ -20,10 +20,10 @@ export function isValidHttpUrl(urlStr: string): boolean {
 }
 
 /**
- * Sanitize URL to prevent leaking user credentials in logs
+ * Sanitize URL to prevent leaking user credentials in logs or metrics
  *
  * Note: `urlStr` must be a valid URL
  */
-export function toSafePrintableUrl(urlStr: string): string {
+export function toPrintableUrl(urlStr: string): string {
   return new URL(urlStr).origin;
 }

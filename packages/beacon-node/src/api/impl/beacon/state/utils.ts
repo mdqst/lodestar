@@ -1,13 +1,17 @@
+import {PubkeyIndexMap} from "@chainsafe/pubkey-index-map";
 import {routes} from "@lodestar/api";
-import {FAR_FUTURE_EPOCH, GENESIS_SLOT} from "@lodestar/params";
-import {BeaconStateAllForks, PubkeyIndexMap} from "@lodestar/state-transition";
-import {BLSPubkey, Epoch, phase0, RootHex, Slot, ValidatorIndex} from "@lodestar/types";
+import {GENESIS_SLOT} from "@lodestar/params";
+import {BeaconStateAllForks} from "@lodestar/state-transition";
+import {BLSPubkey, Epoch, getValidatorStatus, phase0, RootHex, Slot, ValidatorIndex} from "@lodestar/types";
 import {fromHex} from "@lodestar/utils";
-import {IForkChoice} from "@lodestar/fork-choice";
+import {CheckpointWithHex, IForkChoice} from "@lodestar/fork-choice";
 import {IBeaconChain} from "../../../../chain/index.js";
 import {ApiError, ValidationError} from "../../errors.js";
 
-export function resolveStateId(forkChoice: IForkChoice, stateId: routes.beacon.StateId): RootHex | Slot {
+export function resolveStateId(
+  forkChoice: IForkChoice,
+  stateId: routes.beacon.StateId
+): RootHex | Slot | CheckpointWithHex {
   if (stateId === "head") {
     return forkChoice.getHead().stateRoot;
   }
@@ -17,11 +21,11 @@ export function resolveStateId(forkChoice: IForkChoice, stateId: routes.beacon.S
   }
 
   if (stateId === "finalized") {
-    return forkChoice.getFinalizedBlock().stateRoot;
+    return forkChoice.getFinalizedCheckpoint();
   }
 
   if (stateId === "justified") {
-    return forkChoice.getJustifiedBlock().stateRoot;
+    return forkChoice.getJustifiedCheckpoint();
   }
 
   if (typeof stateId === "string" && stateId.startsWith("0x")) {
@@ -30,7 +34,7 @@ export function resolveStateId(forkChoice: IForkChoice, stateId: routes.beacon.S
 
   // id must be slot
   const blockSlot = parseInt(String(stateId), 10);
-  if (isNaN(blockSlot) && isNaN(blockSlot - 0)) {
+  if (Number.isNaN(blockSlot) && Number.isNaN(blockSlot - 0)) {
     throw new ValidationError(`Invalid block id '${stateId}'`, "blockId");
   }
 
@@ -39,17 +43,19 @@ export function resolveStateId(forkChoice: IForkChoice, stateId: routes.beacon.S
 
 export async function getStateResponse(
   chain: IBeaconChain,
-  stateId: routes.beacon.StateId
+  inStateId: routes.beacon.StateId
 ): Promise<{state: BeaconStateAllForks; executionOptimistic: boolean; finalized: boolean}> {
-  const rootOrSlot = resolveStateId(chain.forkChoice, stateId);
+  const stateId = resolveStateId(chain.forkChoice, inStateId);
 
   const res =
-    typeof rootOrSlot === "string"
-      ? await chain.getStateByStateRoot(rootOrSlot)
-      : await chain.getStateBySlot(rootOrSlot);
+    typeof stateId === "string"
+      ? await chain.getStateByStateRoot(stateId)
+      : typeof stateId === "number"
+        ? await chain.getStateBySlot(stateId)
+        : chain.getStateByCheckpoint(stateId);
 
   if (!res) {
-    throw new ApiError(404, `No state found for id '${stateId}'`);
+    throw new ApiError(404, `No state found for id '${inStateId}'`);
   }
 
   return res;
@@ -57,54 +63,46 @@ export async function getStateResponse(
 
 export async function getStateResponseWithRegen(
   chain: IBeaconChain,
-  stateId: routes.beacon.StateId
+  inStateId: routes.beacon.StateId
 ): Promise<{state: BeaconStateAllForks | Uint8Array; executionOptimistic: boolean; finalized: boolean}> {
-  const rootOrSlot = resolveStateId(chain.forkChoice, stateId);
+  const stateId = resolveStateId(chain.forkChoice, inStateId);
 
   const res =
-    typeof rootOrSlot === "string"
-      ? await chain.getStateByStateRoot(rootOrSlot, {allowRegen: true})
-      : rootOrSlot >= chain.forkChoice.getFinalizedBlock().slot
-        ? await chain.getStateBySlot(rootOrSlot, {allowRegen: true})
-        : null; // TODO implement historical state regen
+    typeof stateId === "string"
+      ? await chain.getStateByStateRoot(stateId, {allowRegen: true})
+      : typeof stateId === "number"
+        ? stateId >= chain.forkChoice.getFinalizedBlock().slot
+          ? await chain.getStateBySlot(stateId, {allowRegen: true})
+          : await chain.getHistoricalStateBySlot(stateId)
+        : await chain.getStateOrBytesByCheckpoint(stateId);
 
   if (!res) {
-    throw new ApiError(404, `No state found for id '${stateId}'`);
+    throw new ApiError(404, `No state found for id '${inStateId}'`);
   }
 
   return res;
 }
 
-/**
- * Get the status of the validator
- * based on conditions outlined in https://hackmd.io/ofFJ5gOmQpu1jjHilHbdQQ
- */
-export function getValidatorStatus(validator: phase0.Validator, currentEpoch: Epoch): routes.beacon.ValidatorStatus {
-  // pending
-  if (validator.activationEpoch > currentEpoch) {
-    if (validator.activationEligibilityEpoch === FAR_FUTURE_EPOCH) {
-      return "pending_initialized";
-    } else if (validator.activationEligibilityEpoch < FAR_FUTURE_EPOCH) {
-      return "pending_queued";
-    }
+type GeneralValidatorStatus = "active" | "pending" | "exited" | "withdrawal";
+
+function mapToGeneralStatus(subStatus: routes.beacon.ValidatorStatus): GeneralValidatorStatus {
+  switch (subStatus) {
+    case "active_ongoing":
+    case "active_exiting":
+    case "active_slashed":
+      return "active";
+    case "pending_initialized":
+    case "pending_queued":
+      return "pending";
+    case "exited_slashed":
+    case "exited_unslashed":
+      return "exited";
+    case "withdrawal_possible":
+    case "withdrawal_done":
+      return "withdrawal";
+    default:
+      throw new Error(`Unknown substatus: ${subStatus}`);
   }
-  // active
-  if (validator.activationEpoch <= currentEpoch && currentEpoch < validator.exitEpoch) {
-    if (validator.exitEpoch === FAR_FUTURE_EPOCH) {
-      return "active_ongoing";
-    } else if (validator.exitEpoch < FAR_FUTURE_EPOCH) {
-      return validator.slashed ? "active_slashed" : "active_exiting";
-    }
-  }
-  // exited
-  if (validator.exitEpoch <= currentEpoch && currentEpoch < validator.withdrawableEpoch) {
-    return validator.slashed ? "exited_slashed" : "exited_unslashed";
-  }
-  // withdrawal
-  if (validator.withdrawableEpoch <= currentEpoch) {
-    return validator.effectiveBalance !== 0 ? "withdrawal_possible" : "withdrawal_done";
-  }
-  throw new Error("ValidatorStatus unknown");
 }
 
 export function toValidatorResponse(
@@ -133,9 +131,10 @@ export function filterStateValidatorsByStatus(
 
   for (const validator of validatorsArr) {
     const validatorStatus = getValidatorStatus(validator, currentEpoch);
+    const generalStatus = mapToGeneralStatus(validatorStatus);
 
     const resp = getStateValidatorIndex(validator.pubkey, state, pubkey2index);
-    if (resp.valid && statusSet.has(validatorStatus)) {
+    if (resp.valid && (statusSet.has(validatorStatus) || statusSet.has(generalStatus))) {
       responses.push(
         toValidatorResponse(resp.validatorIndex, validator, state.balances.get(resp.validatorIndex), currentEpoch)
       );
@@ -158,7 +157,7 @@ export function getStateValidatorIndex(
     if (id.startsWith("0x")) {
       try {
         id = fromHex(id);
-      } catch (e) {
+      } catch (_e) {
         return {valid: false, code: 400, reason: "Invalid pubkey hex encoding"};
       }
     } else {
@@ -180,7 +179,7 @@ export function getStateValidatorIndex(
 
   // typeof id === Uint8Array
   const validatorIndex = pubkey2index.get(id);
-  if (validatorIndex === undefined) {
+  if (validatorIndex === null) {
     return {valid: false, code: 404, reason: "Validator pubkey not found in state"};
   }
   if (validatorIndex >= state.validators.length) {

@@ -1,4 +1,4 @@
-import {toHexString} from "@chainsafe/ssz";
+import {toRootHex} from "@lodestar/utils";
 import {EffectiveBalanceIncrements, CachedBeaconStateAllForks} from "@lodestar/state-transition";
 import {phase0, Slot, RootHex, ValidatorIndex} from "@lodestar/types";
 import {CheckpointHexWithTotalBalance, CheckpointHexWithBalance} from "./interface.js";
@@ -55,18 +55,22 @@ export class ForkChoiceStore implements IForkChoiceStore {
   private _finalizedCheckpoint: CheckpointWithHex;
   unrealizedFinalizedCheckpoint: CheckpointWithHex;
   equivocatingIndices = new Set<ValidatorIndex>();
+  justifiedBalancesGetter: JustifiedBalancesGetter;
+  currentSlot: Slot;
 
   constructor(
-    public currentSlot: Slot,
+    currentSlot: Slot,
     justifiedCheckpoint: phase0.Checkpoint,
     finalizedCheckpoint: phase0.Checkpoint,
     justifiedBalances: EffectiveBalanceIncrements,
-    public justifiedBalancesGetter: JustifiedBalancesGetter,
+    justifiedBalancesGetter: JustifiedBalancesGetter,
     private readonly events?: {
       onJustified: (cp: CheckpointWithHex) => void;
       onFinalized: (cp: CheckpointWithHex) => void;
     }
   ) {
+    this.justifiedBalancesGetter = justifiedBalancesGetter;
+    this.currentSlot = currentSlot;
     const justified = {
       checkpoint: toCheckpointWithHex(justifiedCheckpoint),
       balances: justifiedBalances,
@@ -103,7 +107,7 @@ export function toCheckpointWithHex(checkpoint: phase0.Checkpoint): CheckpointWi
   return {
     epoch: checkpoint.epoch,
     root,
-    rootHex: toHexString(root),
+    rootHex: toRootHex(root),
   };
 }
 

@@ -1,5 +1,5 @@
 import path from "node:path";
-import {describe, it, beforeAll, afterAll, beforeEach, afterEach, vi} from "vitest";
+import {describe, it, beforeAll, afterAll, vi, onTestFinished} from "vitest";
 import {retry} from "@lodestar/utils";
 import {getClient} from "@lodestar/api";
 import {config} from "@lodestar/config/default";
@@ -10,10 +10,11 @@ import {
   startExternalSigner,
   StartedExternalSigner,
   getKeystoresStr,
+  stopChildProcess,
 } from "@lodestar/test-utils";
 import {testFilesDir} from "../utils.js";
 
-describe("voluntaryExit using remote signer", function () {
+describe("voluntaryExit using remote signer", () => {
   vi.setConfig({testTimeout: 30_000});
 
   let externalSigner: StartedExternalSigner;
@@ -50,8 +51,11 @@ describe("voluntaryExit using remote signer", function () {
         // Allow voluntary exists to be valid immediately
         "--params.SHARD_COMMITTEE_PERIOD=0",
       ],
-      {pipeStdioToParent: false, logPrefix: "dev", testContext: {beforeEach, afterEach, afterAll}}
+      {pipeStdioToParent: false, logPrefix: "dev"}
     );
+    onTestFinished(async () => {
+      await stopChildProcess(devBnProc);
+    });
 
     // Exit early if process exits
     devBnProc.on("exit", (code) => {
@@ -96,10 +100,8 @@ describe("voluntaryExit using remote signer", function () {
           const validator = (await client.beacon.getStateValidator({stateId: "head", validatorId: pubkey})).value();
           if (validator.status !== "active_exiting") {
             throw Error("Validator not exiting");
-          } else {
-            // eslint-disable-next-line no-console
-            console.log(`Confirmed validator ${pubkey} = ${validator.status}`);
           }
+          console.log(`Confirmed validator ${pubkey} = ${validator.status}`);
         },
         {retryDelay: 1000, retries: 20}
       );

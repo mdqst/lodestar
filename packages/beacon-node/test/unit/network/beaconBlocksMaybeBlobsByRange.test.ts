@@ -10,20 +10,20 @@ import {INetwork} from "../../../src/network/interface.js";
 import {ZERO_HASH} from "../../../src/constants/constants.js";
 
 describe("beaconBlocksMaybeBlobsByRange", () => {
-  beforeAll(async function () {
+  beforeAll(async () => {
     await initCKZG();
     loadEthereumTrustedSetup();
   });
 
   const peerId = "Qma9T5YraSnpRDZqRR4krcSJabThc8nwZuJV3LercPHufi";
 
-  /* eslint-disable @typescript-eslint/naming-convention */
   const chainConfig = createChainForkConfig({
     ...defaultChainConfig,
     ALTAIR_FORK_EPOCH: 0,
     BELLATRIX_FORK_EPOCH: 0,
     CAPELLA_FORK_EPOCH: 0,
     DENEB_FORK_EPOCH: 0,
+    ELECTRA_FORK_EPOCH: 0,
   });
   const genesisValidatorsRoot = Buffer.alloc(32, 0xaa);
   const config = createBeaconConfig(chainConfig, genesisValidatorsRoot);
@@ -101,7 +101,7 @@ describe("beaconBlocksMaybeBlobsByRange", () => {
       const expectedResponse = blocksWithBlobs.map(([block, blobSidecars]) => {
         const blobs = blobSidecars !== undefined ? blobSidecars : [];
         return getBlockInput.availableData(config, block, BlockSource.byRange, null, {
-          fork: ForkName.deneb,
+          fork: ForkName.electra,
           blobs,
           blobsSource: BlobsSource.byRange,
           blobsBytes: blobs.map(() => null),

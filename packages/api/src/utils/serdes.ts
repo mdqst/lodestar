@@ -1,4 +1,5 @@
-import {fromHexString, JsonPath, toHexString} from "@chainsafe/ssz";
+import {JsonPath} from "@chainsafe/ssz";
+import {fromHex, toHex} from "@lodestar/utils";
 
 /**
  * Serialize proof path to JSON.
@@ -17,9 +18,8 @@ export function querySerializeProofPathsArr(paths: JsonPath[]): string[] {
 export function queryParseProofPathsArr(pathStrs: string | string[]): JsonPath[] {
   if (Array.isArray(pathStrs)) {
     return pathStrs.map((pathStr) => queryParseProofPaths(pathStr));
-  } else {
-    return [queryParseProofPaths(pathStrs)];
   }
+  return [queryParseProofPaths(pathStrs)];
 }
 
 /**
@@ -49,7 +49,7 @@ export type U64Str = string;
 
 export function fromU64Str(u64Str: U64Str): number {
   const u64 = parseInt(u64Str, 10);
-  if (!isFinite(u64)) {
+  if (!Number.isFinite(u64)) {
     throw Error(`Invalid uin64 ${u64Str}`);
   }
   return u64;
@@ -77,8 +77,12 @@ export function fromValidatorIdsStr(ids?: string[]): (string | number)[] | undef
 
 const GRAFFITI_HEX_LENGTH = 66;
 
-export function toGraffitiHex(utf8: string): string {
-  const hex = toHexString(new TextEncoder().encode(utf8));
+export function toGraffitiHex(utf8?: string): string | undefined {
+  if (utf8 === undefined) {
+    return undefined;
+  }
+
+  const hex = toHex(new TextEncoder().encode(utf8));
 
   if (hex.length > GRAFFITI_HEX_LENGTH) {
     // remove characters from the end if hex string is too long
@@ -93,10 +97,13 @@ export function toGraffitiHex(utf8: string): string {
   return hex;
 }
 
-export function fromGraffitiHex(hex: string): string {
+export function fromGraffitiHex(hex?: string): string | undefined {
+  if (hex === undefined) {
+    return undefined;
+  }
   try {
-    return new TextDecoder("utf8").decode(fromHexString(hex));
-  } catch {
+    return new TextDecoder("utf8").decode(fromHex(hex));
+  } catch (_e) {
     // allow malformed graffiti hex string
     return hex;
   }

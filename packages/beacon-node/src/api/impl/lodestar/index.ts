@@ -3,7 +3,7 @@ import path from "node:path";
 import {routes} from "@lodestar/api";
 import {ApplicationMethods} from "@lodestar/api/server";
 import {Repository} from "@lodestar/db";
-import {toHex} from "@lodestar/utils";
+import {toHex, toRootHex} from "@lodestar/utils";
 import {getLatestWeakSubjectivityCheckpointEpoch} from "@lodestar/state-transition";
 import {ChainForkConfig} from "@lodestar/config";
 import {ssz} from "@lodestar/types";
@@ -109,6 +109,7 @@ export function getLodestarApi({
 
     async getBlockProcessorQueueItems() {
       return {
+        // biome-ignore lint/complexity/useLiteralKeys: The `blockProcessor` is a protected attribute
         data: (chain as BeaconChain)["blockProcessor"].jobQueue.getItems().map((item) => {
           const [blockInputs, opts] = item.args;
           return {
@@ -173,6 +174,7 @@ export function getLodestarApi({
     async dumpDbBucketKeys({bucket}) {
       for (const repo of Object.values(db) as IBeaconDb[keyof IBeaconDb][]) {
         if (repo instanceof Repository) {
+          // biome-ignore lint/complexity/useLiteralKeys: `bucket` is protected and `bucketId` is private
           if (String(repo["bucket"]) === bucket || repo["bucketId"] === bucket) {
             return {data: stringifyKeys(await repo.keys())};
           }
@@ -202,7 +204,7 @@ function regenRequestToJson(config: ChainForkConfig, regenRequest: RegenRequest)
     case "getPreState": {
       const slot = regenRequest.args[0].slot;
       return {
-        root: toHex(config.getForkTypes(slot).BeaconBlock.hashTreeRoot(regenRequest.args[0])),
+        root: toRootHex(config.getForkTypes(slot).BeaconBlock.hashTreeRoot(regenRequest.args[0])),
         slot,
       };
     }
@@ -218,8 +220,7 @@ function stringifyKeys(keys: (Uint8Array | number | string)[]): string[] {
   return keys.map((key) => {
     if (key instanceof Uint8Array) {
       return toHex(key);
-    } else {
-      return `${key}`;
     }
+    return `${key}`;
   });
 }

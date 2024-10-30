@@ -1,13 +1,13 @@
 import path from "node:path";
-import {afterAll, describe, it, vi, beforeEach, afterEach} from "vitest";
+import {describe, it, vi, onTestFinished} from "vitest";
 import {retry} from "@lodestar/utils";
 import {getClient} from "@lodestar/api";
 import {config} from "@lodestar/config/default";
 import {interopSecretKey} from "@lodestar/state-transition";
-import {spawnCliCommand, execCliCommand} from "@lodestar/test-utils";
+import {spawnCliCommand, execCliCommand, stopChildProcess} from "@lodestar/test-utils";
 import {testFilesDir} from "../utils.js";
 
-describe("voluntaryExit cmd", function () {
+describe("voluntaryExit cmd", () => {
   vi.setConfig({testTimeout: 60_000});
 
   it("Perform a voluntary exit", async () => {
@@ -28,14 +28,11 @@ describe("voluntaryExit cmd", function () {
         // Allow voluntary exists to be valid immediately
         "--params.SHARD_COMMITTEE_PERIOD=0",
       ],
-      {pipeStdioToParent: true, logPrefix: "dev", testContext: {beforeEach, afterEach, afterAll}}
+      {pipeStdioToParent: true, logPrefix: "dev"}
     );
 
-    // Exit early if process exits
-    devBnProc.on("exit", (code) => {
-      if (code !== null && code > 0) {
-        throw new Error(`devBnProc process exited with code ${code}`);
-      }
+    onTestFinished(async () => {
+      await stopChildProcess(devBnProc, "SIGINT");
     });
 
     const baseUrl = `http://127.0.0.1:${restPort}`;
@@ -81,10 +78,8 @@ describe("voluntaryExit cmd", function () {
           const validator = (await client.beacon.getStateValidator({stateId: "head", validatorId: pubkey})).value();
           if (validator.status !== "active_exiting") {
             throw Error("Validator not exiting");
-          } else {
-            // eslint-disable-next-line no-console
-            console.log(`Confirmed validator ${pubkey} = ${validator.status}`);
           }
+          console.log(`Confirmed validator ${pubkey} = ${validator.status}`);
         },
         {retryDelay: 1000, retries: 20}
       );

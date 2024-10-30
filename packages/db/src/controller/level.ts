@@ -44,7 +44,12 @@ export class LevelDbController implements DatabaseController<Uint8Array, Uint8Ar
 
   static async create(opts: LevelDBOptions, {metrics, logger}: LevelDbControllerModules): Promise<LevelDbController> {
     const db =
-      opts.db || new ClassicLevel(opts.name || "beaconchain", {keyEncoding: "binary", valueEncoding: "binary"});
+      opts.db ||
+      new ClassicLevel(opts.name || "beaconchain", {
+        keyEncoding: "binary",
+        valueEncoding: "binary",
+        multithreading: true,
+      });
 
     try {
       await db.open();
@@ -73,11 +78,11 @@ export class LevelDbController implements DatabaseController<Uint8Array, Uint8Ar
   setMetrics(metrics: LevelDbControllerMetrics): void {
     if (this.metrics !== null) {
       throw Error("metrics can only be set once");
-    } else {
-      this.metrics = metrics;
-      if (this.status === Status.started) {
-        this.collectDbSizeMetric();
-      }
+    }
+
+    this.metrics = metrics;
+    if (this.status === Status.started) {
+      this.collectDbSizeMetric();
     }
   }
 

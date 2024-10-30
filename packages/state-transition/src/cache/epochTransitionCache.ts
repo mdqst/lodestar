@@ -1,6 +1,12 @@
-import {Epoch, ValidatorIndex} from "@lodestar/types";
-import {intDiv} from "@lodestar/utils";
-import {EPOCHS_PER_SLASHINGS_VECTOR, FAR_FUTURE_EPOCH, ForkSeq, MAX_EFFECTIVE_BALANCE} from "@lodestar/params";
+import {phase0, Epoch, RootHex, ValidatorIndex} from "@lodestar/types";
+import {intDiv, toRootHex} from "@lodestar/utils";
+import {
+  EPOCHS_PER_SLASHINGS_VECTOR,
+  FAR_FUTURE_EPOCH,
+  ForkSeq,
+  SLOTS_PER_HISTORICAL_ROOT,
+  MIN_ACTIVATION_BALANCE,
+} from "@lodestar/params";
 
 import {
   hasMarkers,
@@ -53,15 +59,6 @@ export interface EpochTransitionCache {
   currEpochUnslashedTargetStakeByIncrement: number;
 
   /**
-   * Validator indices that are either
-   * - active in previous epoch
-   * - slashed and not yet withdrawable
-   *
-   * getRewardsAndPenalties() and processInactivityUpdates() iterate this list
-   */
-  eligibleValidatorIndices: ValidatorIndex[];
-
-  /**
    * Indices which will receive the slashing penalty
    * ```
    * v.withdrawableEpoch === currentEpoch + EPOCHS_PER_SLASHINGS_VECTOR / 2
@@ -87,7 +84,7 @@ export interface EpochTransitionCache {
   /**
    * Indices of validators that just joined and will be eligible for the active queue.
    * ```
-   * v.activationEligibilityEpoch === FAR_FUTURE_EPOCH && v.effectiveBalance === MAX_EFFECTIVE_BALANCE
+   * v.activationEligibilityEpoch === FAR_FUTURE_EPOCH && v.effectiveBalance >= MAX_EFFECTIVE_BALANCE
    * ```
    * All validators in indicesEligibleForActivationQueue get activationEligibilityEpoch set. So it can only include
    * validators that have just joined the registry through a valid full deposit(s).
@@ -125,13 +122,22 @@ export interface EpochTransitionCache {
    * - un-slashed validators
    * - prev attester flag set
    * With a status flag to check this conditions at once we just have to mask with an OR of the conditions.
+   * This is only for phase0 only.
    */
-
   proposerIndices: number[];
 
+  /**
+   * This is for phase0 only.
+   */
   inclusionDelays: number[];
 
   flags: number[];
+
+  /**
+   * Validators in the current epoch, should use it for read-only value instead of accessing state.validators directly.
+   * Note that during epoch processing, validators could be updated so need to use it with care.
+   */
+  validators: phase0.Validator[];
 
   /**
    * balances array will be populated by processRewardsAndPenalties() and consumed by processEffectiveBalanceUpdates().
@@ -149,7 +155,12 @@ export interface EpochTransitionCache {
    * | beforeProcessEpoch               | calculate during the validator loop|
    * | afterEpochTransitionCache                | read it                            |
    */
-  nextEpochShufflingActiveValidatorIndices: ValidatorIndex[];
+  nextShufflingActiveIndices: Uint32Array;
+
+  /**
+   * Shuffling decision root that gets set on the EpochCache in afterProcessEpoch
+   */
+  nextShufflingDecisionRoot: RootHex;
 
   /**
    * Altair specific, this is total active balances for the next epoch.
@@ -191,12 +202,14 @@ const isActivePrevEpoch = new Array<boolean>();
 const isActiveCurrEpoch = new Array<boolean>();
 /** WARNING: reused, never gc'd */
 const isActiveNextEpoch = new Array<boolean>();
-/** WARNING: reused, never gc'd */
+/** WARNING: reused, never gc'd, from altair this is empty array */
 const proposerIndices = new Array<number>();
-/** WARNING: reused, never gc'd */
+/** WARNING: reused, never gc'd, from altair this is empty array */
 const inclusionDelays = new Array<number>();
 /** WARNING: reused, never gc'd */
 const flags = new Array<number>();
+/** WARNING: reused, never gc'd */
+const nextEpochShufflingActiveValidatorIndices = new Array<number>();
 
 export function beforeProcessEpoch(
   state: CachedBeaconStateAllForks,
@@ -212,12 +225,10 @@ export function beforeProcessEpoch(
 
   const slashingsEpoch = currentEpoch + intDiv(EPOCHS_PER_SLASHINGS_VECTOR, 2);
 
-  const eligibleValidatorIndices: ValidatorIndex[] = [];
   const indicesToSlash: ValidatorIndex[] = [];
   const indicesEligibleForActivationQueue: ValidatorIndex[] = [];
   const indicesEligibleForActivation: ValidatorIndex[] = [];
   const indicesToEject: ValidatorIndex[] = [];
-  const nextEpochShufflingActiveValidatorIndices: ValidatorIndex[] = [];
 
   let totalActiveStakeByIncrement = 0;
 
@@ -227,6 +238,8 @@ export function beforeProcessEpoch(
   const validators = state.validators.getAllReadonlyValues();
   const validatorCount = validators.length;
 
+  nextEpochShufflingActiveValidatorIndices.length = validatorCount;
+  let nextEpochShufflingActiveIndicesLength = 0;
   // pre-fill with true (most validators are active)
   isActivePrevEpoch.length = validatorCount;
   isActiveCurrEpoch.length = validatorCount;
@@ -238,14 +251,10 @@ export function beforeProcessEpoch(
   // During the epoch transition, additional data is precomputed to avoid traversing any state a second
   // time. Attestations are a big part of this, and each validator has a "status" to represent its
   // precomputed participation.
-  // - proposerIndex: number; // -1 when not included by any proposer
-  // - inclusionDelay: number;
+  // - proposerIndex: number; // -1 when not included by any proposer, for phase0 only so it's declared inside phase0 block below
+  // - inclusionDelay: number;// for phase0 only so it's declared inside phase0 block below
   // - flags: number; // bitfield of AttesterFlags
-  proposerIndices.length = validatorCount;
-  inclusionDelays.length = validatorCount;
   flags.length = validatorCount;
-  proposerIndices.fill(-1);
-  inclusionDelays.fill(0);
   // flags.fill(0);
   // flags will be zero'd out below
   // In the first loop, set slashed+eligibility
@@ -284,7 +293,6 @@ export function beforeProcessEpoch(
     // This is done to prevent self-slashing from being a way to escape inactivity leaks.
     // TODO: Consider using an array of `eligibleValidatorIndices: number[]`
     if (isActivePrev || (validator.slashed && prevEpoch + 1 < validator.withdrawableEpoch)) {
-      eligibleValidatorIndices.push(i);
       flag |= FLAG_ELIGIBLE_ATTESTER;
     }
 
@@ -301,12 +309,12 @@ export function beforeProcessEpoch(
     // def is_eligible_for_activation_queue(validator: Validator) -> bool:
     //   return (
     //     validator.activation_eligibility_epoch == FAR_FUTURE_EPOCH
-    //     and validator.effective_balance == MAX_EFFECTIVE_BALANCE
+    //     and validator.effective_balance >= MAX_EFFECTIVE_BALANCE # [Modified in Electra]
     //   )
     // ```
     if (
       validator.activationEligibilityEpoch === FAR_FUTURE_EPOCH &&
-      validator.effectiveBalance === MAX_EFFECTIVE_BALANCE
+      validator.effectiveBalance >= MIN_ACTIVATION_BALANCE
     ) {
       indicesEligibleForActivationQueue.push(i);
     }
@@ -348,9 +356,27 @@ export function beforeProcessEpoch(
     }
 
     if (isActiveNext2) {
-      nextEpochShufflingActiveValidatorIndices.push(i);
+      nextEpochShufflingActiveValidatorIndices[nextEpochShufflingActiveIndicesLength++] = i;
     }
   }
+
+  // Trigger async build of shuffling for epoch after next (nextShuffling post epoch transition)
+  const epochAfterNext = state.epochCtx.nextEpoch + 1;
+  // cannot call calculateShufflingDecisionRoot here because spec prevent getting current slot
+  // as a decision block.  we are part way through the transition though and this was added in
+  // process slot beforeProcessEpoch happens so it available and valid
+  const nextShufflingDecisionRoot = toRootHex(state.blockRoots.get(state.slot % SLOTS_PER_HISTORICAL_ROOT));
+  const nextShufflingActiveIndices = new Uint32Array(nextEpochShufflingActiveIndicesLength);
+  if (nextEpochShufflingActiveIndicesLength > nextEpochShufflingActiveValidatorIndices.length) {
+    throw new Error(
+      `Invalid activeValidatorCount: ${nextEpochShufflingActiveIndicesLength} > ${nextEpochShufflingActiveValidatorIndices.length}`
+    );
+  }
+  // only the first `activeValidatorCount` elements are copied to `activeIndices`
+  for (let i = 0; i < nextEpochShufflingActiveIndicesLength; i++) {
+    nextShufflingActiveIndices[i] = nextEpochShufflingActiveValidatorIndices[i];
+  }
+  state.epochCtx.shufflingCache?.build(epochAfterNext, nextShufflingDecisionRoot, state, nextShufflingActiveIndices);
 
   if (totalActiveStakeByIncrement < 1) {
     totalActiveStakeByIncrement = 1;
@@ -368,6 +394,10 @@ export function beforeProcessEpoch(
   );
 
   if (forkSeq === ForkSeq.phase0) {
+    proposerIndices.length = validatorCount;
+    proposerIndices.fill(-1);
+    inclusionDelays.length = validatorCount;
+    inclusionDelays.fill(0);
     processPendingAttestations(
       state as CachedBeaconStatePhase0,
       proposerIndices,
@@ -467,12 +497,12 @@ export function beforeProcessEpoch(
       headStakeByIncrement: prevHeadUnslStake,
     },
     currEpochUnslashedTargetStakeByIncrement: currTargetUnslStake,
-    eligibleValidatorIndices,
     indicesToSlash,
     indicesEligibleForActivationQueue,
     indicesEligibleForActivation,
     indicesToEject,
-    nextEpochShufflingActiveValidatorIndices,
+    nextShufflingDecisionRoot,
+    nextShufflingActiveIndices,
     // to be updated in processEffectiveBalanceUpdates
     nextEpochTotalActiveBalanceByIncrement: 0,
     isActivePrevEpoch,
@@ -481,7 +511,7 @@ export function beforeProcessEpoch(
     proposerIndices,
     inclusionDelays,
     flags,
-
+    validators,
     // Will be assigned in processRewardsAndPenalties()
     balances: undefined,
   };

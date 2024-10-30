@@ -19,7 +19,7 @@ import {
 import {getNodeLogger} from "@lodestar/logger/node";
 import {getBeaconConfigFromArgs} from "../../config/index.js";
 import {GlobalArgs} from "../../options/index.js";
-import {YargsError, cleanOldLogFiles, getDefaultGraffiti, mkdir, parseLoggerArgs} from "../../util/index.js";
+import {YargsError, cleanOldLogFiles, mkdir, parseLoggerArgs} from "../../util/index.js";
 import {onGracefulShutdown, parseFeeRecipient, parseProposerConfig} from "../../util/index.js";
 import {getVersionData} from "../../util/version.js";
 import {parseBuilderSelection, parseBuilderBoostFactor} from "../../util/proposerConfig.js";
@@ -106,7 +106,7 @@ export async function validatorHandler(args: IValidatorCliArgs & GlobalArgs): Pr
   // Create metrics registry if metrics are enabled or monitoring endpoint is configured
   // Send version and network data for static registries
 
-  const register = args["metrics"] || args["monitoring.endpoint"] ? new RegistryMetricCreator() : null;
+  const register = args.metrics || args["monitoring.endpoint"] ? new RegistryMetricCreator() : null;
   const metrics = register && getMetrics(register, {version, commit, network});
 
   // Start metrics server if metrics are enabled.
@@ -117,7 +117,7 @@ export async function validatorHandler(args: IValidatorCliArgs & GlobalArgs): Pr
     onGracefulShutdownCbs.push(() => closeMetrics());
 
     // only start server if metrics are explicitly enabled
-    if (args["metrics"]) {
+    if (args.metrics) {
       const port = args["metrics.port"] ?? validatorMetricsDefaultOptions.port;
       const address = args["metrics.address"] ?? validatorMetricsDefaultOptions.address;
       const metricsServer = await getHttpMetricsServer({port, address}, {register, logger});
@@ -157,6 +157,7 @@ export async function validatorHandler(args: IValidatorCliArgs & GlobalArgs): Pr
         globalInit: {
           requestWireFormat: parseWireFormat(args, "http.requestWireFormat"),
           responseWireFormat: parseWireFormat(args, "http.responseWireFormat"),
+          headers: {"User-Agent": `Lodestar/${version}`},
         },
       },
       logger,
@@ -185,7 +186,7 @@ export async function validatorHandler(args: IValidatorCliArgs & GlobalArgs): Pr
 
   // Start keymanager API backend
   // Only if keymanagerEnabled flag is set to true
-  if (args["keymanager"]) {
+  if (args.keymanager) {
     // if proposerSettingsFile provided disable the key proposerConfigWrite in keymanager
     const proposerConfigWriteDisabled = args.proposerSettingsFile !== undefined;
     if (proposerConfigWriteDisabled) {
@@ -208,6 +209,7 @@ export async function validatorHandler(args: IValidatorCliArgs & GlobalArgs): Pr
         isAuthEnabled: args["keymanager.auth"],
         headerLimit: args["keymanager.headerLimit"],
         bodyLimit: args["keymanager.bodyLimit"],
+        stacktraces: args["keymanager.stacktraces"],
         tokenFile: args["keymanager.tokenFile"],
         tokenDir: dbPath,
       },
@@ -226,13 +228,13 @@ function getProposerConfigFromArgs(
   }: {persistedKeysBackend: IPersistedKeysBackend; accountPaths: {proposerDir: string}}
 ): ValidatorProposerConfig {
   const defaultConfig = {
-    graffiti: args.graffiti ?? getDefaultGraffiti(),
+    graffiti: args.graffiti,
     strictFeeRecipientCheck: args.strictFeeRecipientCheck,
     feeRecipient: args.suggestedFeeRecipient ? parseFeeRecipient(args.suggestedFeeRecipient) : undefined,
     builder: {
       gasLimit: args.defaultGasLimit,
       selection: parseBuilderSelection(
-        args["builder.selection"] ?? (args["builder"] ? defaultOptions.builderAliasSelection : undefined)
+        args["builder.selection"] ?? (args.builder ? defaultOptions.builderAliasSelection : undefined)
       ),
       boostFactor: parseBuilderBoostFactor(args["builder.boostFactor"]),
     },

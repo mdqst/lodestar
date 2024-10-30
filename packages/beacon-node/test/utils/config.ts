@@ -6,7 +6,6 @@ import {ZERO_HASH} from "../../src/constants/index.js";
 /** default config with ZERO_HASH as genesisValidatorsRoot */
 export const config = createBeaconConfig(chainConfig, ZERO_HASH);
 
-/* eslint-disable @typescript-eslint/naming-convention */
 export function getConfig(fork: ForkName, forkEpoch = 0): ChainForkConfig {
   switch (fork) {
     case ForkName.phase0:
@@ -30,6 +29,14 @@ export function getConfig(fork: ForkName, forkEpoch = 0): ChainForkConfig {
         BELLATRIX_FORK_EPOCH: 0,
         CAPELLA_FORK_EPOCH: 0,
         DENEB_FORK_EPOCH: forkEpoch,
+      });
+    case ForkName.electra:
+      return createChainForkConfig({
+        ALTAIR_FORK_EPOCH: 0,
+        BELLATRIX_FORK_EPOCH: 0,
+        CAPELLA_FORK_EPOCH: 0,
+        DENEB_FORK_EPOCH: 0,
+        ELECTRA_FORK_EPOCH: forkEpoch,
       });
   }
 }

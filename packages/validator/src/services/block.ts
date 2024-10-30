@@ -1,4 +1,3 @@
-import {toHexString} from "@chainsafe/ssz";
 import {
   BLSPubkey,
   Slot,
@@ -15,7 +14,7 @@ import {
 } from "@lodestar/types";
 import {ChainForkConfig} from "@lodestar/config";
 import {ForkPreBlobs, ForkBlobs, ForkSeq, ForkExecution, ForkName} from "@lodestar/params";
-import {extendError, prettyBytes, prettyWeiToEth} from "@lodestar/utils";
+import {extendError, prettyBytes, prettyWeiToEth, toPubkeyHex} from "@lodestar/utils";
 import {ApiClient, routes} from "@lodestar/api";
 import {IClock, LoggerVc} from "../util/index.js";
 import {PubkeyHex} from "../types.js";
@@ -110,7 +109,7 @@ export class BlockProposingService {
 
   /** Produce a block at the given slot for pubkey */
   private async createAndPublishBlock(pubkey: BLSPubkey, slot: Slot): Promise<void> {
-    const pubkeyHex = toHexString(pubkey);
+    const pubkeyHex = toPubkeyHex(pubkey);
     const logCtx = {slot, validator: prettyBytes(pubkeyHex)};
 
     // Wrap with try catch here to re-use `logCtx`
@@ -160,7 +159,7 @@ export class BlockProposingService {
       this.logger.debug("Produced block", {...debugLogCtx, ...blockContents.debugLogCtx});
       this.metrics?.blocksProduced.inc();
 
-      const signedBlock = await this.validatorStore.signBlock(pubkey, blockContents.block, slot);
+      const signedBlock = await this.validatorStore.signBlock(pubkey, blockContents.block, slot, this.logger);
 
       const {broadcastValidation} = this.opts;
       const publishOpts = {broadcastValidation};
@@ -207,7 +206,7 @@ export class BlockProposingService {
     _config: ChainForkConfig,
     slot: Slot,
     randaoReveal: BLSSignature,
-    graffiti: string,
+    graffiti: string | undefined,
     builderBoostFactor: bigint,
     {feeRecipient, strictFeeRecipientCheck, blindedLocal}: routes.validator.ExtraProduceBlockOpts,
     builderSelection: routes.validator.BuilderSelection
@@ -245,7 +244,7 @@ export class BlockProposingService {
     config: ChainForkConfig,
     slot: Slot,
     randaoReveal: BLSSignature,
-    graffiti: string,
+    graffiti: string | undefined,
     _builderBoostFactor: bigint,
     _opts: routes.validator.ExtraProduceBlockOpts,
     builderSelection: routes.validator.BuilderSelection
@@ -266,18 +265,17 @@ export class BlockProposingService {
         debugLogCtx,
         builderSelection
       );
-    } else {
-      Object.assign(debugLogCtx, {api: "produceBlindedBlock"});
-      const res = await this.api.validator.produceBlindedBlock({slot, randaoReveal, graffiti});
-      const {version} = res.meta();
-      const executionPayloadSource = ProducedBlockSource.builder;
-
-      return parseProduceBlockResponse(
-        {data: res.value(), executionPayloadBlinded: true, executionPayloadSource, version},
-        debugLogCtx,
-        builderSelection
-      );
     }
+    Object.assign(debugLogCtx, {api: "produceBlindedBlock"});
+    const res = await this.api.validator.produceBlindedBlock({slot, randaoReveal, graffiti});
+    const {version} = res.meta();
+    const executionPayloadSource = ProducedBlockSource.builder;
+
+    return parseProduceBlockResponse(
+      {data: res.value(), executionPayloadBlinded: true, executionPayloadSource, version},
+      debugLogCtx,
+      builderSelection
+    );
   };
 }
 
@@ -312,26 +310,26 @@ function parseProduceBlockResponse(
       executionPayloadSource,
       debugLogCtx,
     } as FullOrBlindedBlockWithContents & DebugLogCtx;
-  } else {
-    const data = response.data;
-    if (isBlockContents(data)) {
-      return {
-        block: data.block,
-        contents: {blobs: data.blobs, kzgProofs: data.kzgProofs},
-        version: response.version,
-        executionPayloadBlinded: false,
-        executionPayloadSource,
-        debugLogCtx,
-      } as FullOrBlindedBlockWithContents & DebugLogCtx;
-    } else {
-      return {
-        block: response.data,
-        contents: null,
-        version: response.version,
-        executionPayloadBlinded: false,
-        executionPayloadSource,
-        debugLogCtx,
-      } as FullOrBlindedBlockWithContents & DebugLogCtx;
-    }
   }
+
+  const data = response.data;
+  if (isBlockContents(data)) {
+    return {
+      block: data.block,
+      contents: {blobs: data.blobs, kzgProofs: data.kzgProofs},
+      version: response.version,
+      executionPayloadBlinded: false,
+      executionPayloadSource,
+      debugLogCtx,
+    } as FullOrBlindedBlockWithContents & DebugLogCtx;
+  }
+
+  return {
+    block: response.data,
+    contents: null,
+    version: response.version,
+    executionPayloadBlinded: false,
+    executionPayloadSource,
+    debugLogCtx,
+  } as FullOrBlindedBlockWithContents & DebugLogCtx;
 }

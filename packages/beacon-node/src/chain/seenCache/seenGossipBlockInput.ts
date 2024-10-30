@@ -1,7 +1,6 @@
-import {toHexString} from "@chainsafe/ssz";
 import {deneb, RootHex, SignedBeaconBlock, ssz} from "@lodestar/types";
 import {ChainForkConfig} from "@lodestar/config";
-import {pruneSetToMax} from "@lodestar/utils";
+import {pruneSetToMax, toRootHex} from "@lodestar/utils";
 import {BLOBSIDECAR_FIXED_SIZE, isForkBlobs, ForkName} from "@lodestar/params";
 
 import {
@@ -73,17 +72,15 @@ export class SeenGossipBlockInput {
         blockInput: NullBlockInput;
         blockInputMeta: {pending: GossipedInputType.block; haveBlobs: number; expectedBlobs: null};
       } {
-    let blockHex;
-    let blockCache;
-    let fork;
+    let blockHex: RootHex;
+    let blockCache: BlockInputCacheType;
+    let fork: ForkName;
 
     if (gossipedInput.type === GossipedInputType.block) {
       const {signedBlock, blockBytes} = gossipedInput;
       fork = config.getForkName(signedBlock.message.slot);
 
-      blockHex = toHexString(
-        config.getForkTypes(signedBlock.message.slot).BeaconBlock.hashTreeRoot(signedBlock.message)
-      );
+      blockHex = toRootHex(config.getForkTypes(signedBlock.message.slot).BeaconBlock.hashTreeRoot(signedBlock.message));
       blockCache = this.blockInputCache.get(blockHex) ?? getEmptyBlockInputCacheEntry(fork);
 
       blockCache.block = signedBlock;
@@ -93,7 +90,7 @@ export class SeenGossipBlockInput {
       const blockRoot = ssz.phase0.BeaconBlockHeader.hashTreeRoot(blobSidecar.signedBlockHeader.message);
       fork = config.getForkName(blobSidecar.signedBlockHeader.message.slot);
 
-      blockHex = toHexString(blockRoot);
+      blockHex = toRootHex(blockRoot);
       blockCache = this.blockInputCache.get(blockHex) ?? getEmptyBlockInputCacheEntry(fork);
 
       // TODO: freetheblobs check if its the same blob or a duplicate and throw/take actions
@@ -152,42 +149,42 @@ export class SeenGossipBlockInput {
           blockInput,
           blockInputMeta: {pending: null, haveBlobs: allBlobs.blobs.length, expectedBlobs: blobKzgCommitments.length},
         };
-      } else {
-        const blockInput = getBlockInput.dataPromise(
-          config,
-          signedBlock,
-          BlockSource.gossip,
-          blockBytes ?? null,
-          cachedData
-        );
-
-        resolveBlockInput(blockInput);
-        return {
-          blockInput,
-          blockInputMeta: {
-            pending: GossipedInputType.blob,
-            haveBlobs: blobsCache.size,
-            expectedBlobs: blobKzgCommitments.length,
-          },
-        };
       }
-    } else {
-      // will need to wait for the block to showup
-      if (cachedData === undefined) {
-        throw Error("Missing cachedData for deneb+ blobs");
-      }
-      const {blobsCache} = cachedData;
 
+      const blockInput = getBlockInput.dataPromise(
+        config,
+        signedBlock,
+        BlockSource.gossip,
+        blockBytes ?? null,
+        cachedData
+      );
+
+      resolveBlockInput(blockInput);
       return {
-        blockInput: {
-          block: null,
-          blockRootHex: blockHex,
-          cachedData,
-          blockInputPromise,
+        blockInput,
+        blockInputMeta: {
+          pending: GossipedInputType.blob,
+          haveBlobs: blobsCache.size,
+          expectedBlobs: blobKzgCommitments.length,
         },
-        blockInputMeta: {pending: GossipedInputType.block, haveBlobs: blobsCache.size, expectedBlobs: null},
       };
     }
+
+    // will need to wait for the block to showup
+    if (cachedData === undefined) {
+      throw Error("Missing cachedData for deneb+ blobs");
+    }
+    const {blobsCache} = cachedData;
+
+    return {
+      blockInput: {
+        block: null,
+        blockRootHex: blockHex,
+        cachedData,
+        blockInputPromise,
+      },
+      blockInputMeta: {pending: GossipedInputType.block, haveBlobs: blobsCache.size, expectedBlobs: null},
+    };
   }
 }
 

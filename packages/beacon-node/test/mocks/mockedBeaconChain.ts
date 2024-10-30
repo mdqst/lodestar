@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 import {vi, Mocked, Mock} from "vitest";
+import {PubkeyIndexMap} from "@chainsafe/pubkey-index-map";
 import {config as defaultConfig} from "@lodestar/config/default";
 import {ChainForkConfig} from "@lodestar/config";
 import {ForkChoice, ProtoBlock, EpochDifference} from "@lodestar/fork-choice";
@@ -20,7 +20,7 @@ import {getMockedClock} from "./clock.js";
 
 export type MockedBeaconChain = Mocked<BeaconChain> & {
   logger: Mocked<Logger>;
-  getHeadState: Mock<[]>;
+  getHeadState: Mock;
   forkChoice: MockedForkChoice;
   executionEngine: Mocked<ExecutionEngineHttp>;
   executionBuilder: Mocked<ExecutionBuilderHttp>;
@@ -31,10 +31,10 @@ export type MockedBeaconChain = Mocked<BeaconChain> & {
   shufflingCache: Mocked<ShufflingCache>;
   regen: Mocked<QueuedStateRegenerator>;
   bls: {
-    verifySignatureSets: Mock<[boolean]>;
-    verifySignatureSetsSameMessage: Mock<[boolean]>;
+    verifySignatureSets: Mock<() => boolean>;
+    verifySignatureSetsSameMessage: Mock<() => boolean>;
     close: Mock;
-    canAcceptWork: Mock<[boolean]>;
+    canAcceptWork: Mock<() => boolean>;
   };
   lightClientServer: Mocked<LightClientServer>;
 };
@@ -117,17 +117,18 @@ vi.mock("../../src/chain/chain.js", async (importActual) => {
       executionEngine: {
         notifyForkchoiceUpdate: vi.fn(),
         getPayload: vi.fn(),
+        getClientVersion: vi.fn(),
       },
       executionBuilder: {},
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-expect-error
       eth1: new Eth1ForBlockProduction(),
       opPool: new OpPool(),
-      aggregatedAttestationPool: new AggregatedAttestationPool(),
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      aggregatedAttestationPool: new AggregatedAttestationPool(config),
       // @ts-expect-error
       beaconProposerCache: new BeaconProposerCache(),
       shufflingCache: new ShufflingCache(),
+      pubkey2index: new PubkeyIndexMap(),
+      index2pubkey: [],
       produceCommonBlockBody: vi.fn(),
       getProposerHead: vi.fn(),
       produceBlock: vi.fn(),
@@ -137,6 +138,7 @@ vi.mock("../../src/chain/chain.js", async (importActual) => {
       predictProposerHead: vi.fn(),
       getHeadStateAtCurrentEpoch: vi.fn(),
       getHeadState: vi.fn(),
+      getStateBySlot: vi.fn(),
       updateBuilderStatus: vi.fn(),
       processBlock: vi.fn(),
       regenStateForAttestationVerification: vi.fn(),
@@ -168,7 +170,6 @@ export type MockedBeaconChainOptions = {
 
 export function getMockedBeaconChain(opts?: Partial<MockedBeaconChainOptions>): MockedBeaconChain {
   const {clock, genesisTime, config} = opts ?? {};
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-expect-error
   return new BeaconChain({
     clock: clock ?? "fake",

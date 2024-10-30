@@ -1,14 +1,14 @@
 import path from "node:path";
-import {describe, it, vi, expect, afterAll, beforeEach, afterEach} from "vitest";
+import {describe, it, vi, expect, onTestFinished} from "vitest";
 import {getClient} from "@lodestar/api";
 import {getClient as getKeymanagerClient} from "@lodestar/api/keymanager";
 import {config} from "@lodestar/config/default";
 import {interopSecretKey} from "@lodestar/state-transition";
-import {spawnCliCommand} from "@lodestar/test-utils";
+import {spawnCliCommand, stopChildProcess} from "@lodestar/test-utils";
 import {retry} from "@lodestar/utils";
 import {testFilesDir} from "../utils.js";
 
-describe("voluntary exit from api", function () {
+describe("voluntary exit from api", () => {
   vi.setConfig({testTimeout: 60_000});
 
   it("Perform a voluntary exit", async () => {
@@ -37,8 +37,11 @@ describe("voluntary exit from api", function () {
         // Disable bearer token auth to simplify testing
         "--keymanager.auth=false",
       ],
-      {pipeStdioToParent: false, logPrefix: "dev", testContext: {beforeEach, afterEach, afterAll}}
+      {pipeStdioToParent: false, logPrefix: "dev"}
     );
+    onTestFinished(async () => {
+      await stopChildProcess(devProc);
+    });
 
     // Exit early if process exits
     devProc.on("exit", (code) => {
@@ -82,10 +85,8 @@ describe("voluntary exit from api", function () {
         const validator = (await beaconClient.getStateValidator({stateId: "head", validatorId: pubkeyToExit})).value();
         if (validator.status !== "active_exiting") {
           throw Error("Validator not exiting");
-        } else {
-          // eslint-disable-next-line no-console
-          console.log(`Confirmed validator ${pubkeyToExit} = ${validator.status}`);
         }
+        console.log(`Confirmed validator ${pubkeyToExit} = ${validator.status}`);
       },
       {retryDelay: 1000, retries: 20}
     );

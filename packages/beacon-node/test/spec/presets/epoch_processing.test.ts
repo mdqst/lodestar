@@ -5,6 +5,7 @@ import {
   EpochTransitionCache,
   BeaconStateAllForks,
   beforeProcessEpoch,
+  CachedBeaconStateAltair,
 } from "@lodestar/state-transition";
 import * as epochFns from "@lodestar/state-transition/epoch";
 import {ssz} from "@lodestar/types";
@@ -19,10 +20,11 @@ import {specTestIterator} from "../utils/specTestIterator.js";
 
 export type EpochTransitionFn = (state: CachedBeaconStateAllForks, epochTransitionCache: EpochTransitionCache) => void;
 
-/* eslint-disable @typescript-eslint/naming-convention */
-
 const epochTransitionFns: Record<string, EpochTransitionFn> = {
-  effective_balance_updates: epochFns.processEffectiveBalanceUpdates,
+  effective_balance_updates: (state, epochTransitionCache) => {
+    const fork = state.config.getForkSeq(state.slot);
+    epochFns.processEffectiveBalanceUpdates(fork, state, epochTransitionCache);
+  },
   eth1_data_reset: epochFns.processEth1DataReset,
   historical_roots_update: epochFns.processHistoricalRootsUpdate,
   inactivity_updates: epochFns.processInactivityUpdates as EpochTransitionFn,
@@ -30,12 +32,20 @@ const epochTransitionFns: Record<string, EpochTransitionFn> = {
   participation_flag_updates: epochFns.processParticipationFlagUpdates as EpochTransitionFn,
   participation_record_updates: epochFns.processParticipationRecordUpdates as EpochTransitionFn,
   randao_mixes_reset: epochFns.processRandaoMixesReset,
-  registry_updates: epochFns.processRegistryUpdates,
+  registry_updates: (state, epochTransitionCache) => {
+    const fork = state.config.getForkSeq(state.slot);
+    epochFns.processRegistryUpdates(fork, state, epochTransitionCache);
+  },
   rewards_and_penalties: epochFns.processRewardsAndPenalties,
   slashings: epochFns.processSlashings,
   slashings_reset: epochFns.processSlashingsReset,
-  sync_committee_updates: epochFns.processSyncCommitteeUpdates as EpochTransitionFn,
+  sync_committee_updates: (state, _) => {
+    const fork = state.config.getForkSeq(state.slot);
+    epochFns.processSyncCommitteeUpdates(fork, state as CachedBeaconStateAltair);
+  },
   historical_summaries_update: epochFns.processHistoricalSummariesUpdate as EpochTransitionFn,
+  pending_deposits: epochFns.processPendingDeposits as EpochTransitionFn,
+  pending_consolidations: epochFns.processPendingConsolidations as EpochTransitionFn,
 };
 
 /**
@@ -87,12 +97,12 @@ const epochProcessing =
           post: ssz[fork].BeaconState,
         },
         getExpected: (testCase) => testCase.post,
-        expectFunc: (testCase, expected, actual) => {
+        expectFunc: (_testCase, expected, actual) => {
           expectEqualBeaconState(fork, expected, actual);
         },
         // Do not manually skip tests here, do it in packages/beacon-node/test/spec/presets/index.test.ts
         shouldSkip: (_testcase, name, _index) =>
-          skipTestNames !== undefined && skipTestNames.some((skipTestName) => name.includes(skipTestName)),
+          skipTestNames?.some((skipTestName) => name.includes(skipTestName)) ?? false,
       },
     };
   };

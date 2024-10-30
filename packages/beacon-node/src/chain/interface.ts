@@ -1,4 +1,5 @@
 import {CompositeTypeAny, TreeView, Type} from "@chainsafe/ssz";
+import {PubkeyIndexMap} from "@chainsafe/pubkey-index-map";
 import {
   UintNum64,
   Root,
@@ -21,7 +22,6 @@ import {
   CachedBeaconStateAllForks,
   EpochShuffling,
   Index2PubkeyCache,
-  PubkeyIndexMap,
 } from "@lodestar/state-transition";
 import {BeaconConfig} from "@lodestar/config";
 import {Logger} from "@lodestar/utils";
@@ -30,6 +30,7 @@ import {IEth1ForBlockProduction} from "../eth1/index.js";
 import {IExecutionEngine, IExecutionBuilder} from "../execution/index.js";
 import {Metrics} from "../metrics/metrics.js";
 import {IClock} from "../util/clock.js";
+import {BufferPool} from "../util/bufferPool.js";
 import {ChainEventEmitter} from "./emitter.js";
 import {IStateRegenerator, RegenCaller} from "./regen/index.js";
 import {IBlsVerifier} from "./bls/index.js";
@@ -57,6 +58,7 @@ import {ShufflingCache} from "./shufflingCache.js";
 import {BlockRewards} from "./rewards/blockRewards.js";
 import {AttestationsRewards} from "./rewards/attestationsRewards.js";
 import {SyncCommitteeRewards} from "./rewards/syncCommitteeRewards.js";
+import {ForkchoiceCaller} from "./forkChoice/index.js";
 
 export {BlockType, type AssembledBlockType};
 export {type ProposerPreparationData};
@@ -86,6 +88,7 @@ export interface IBeaconChain {
   readonly config: BeaconConfig;
   readonly logger: Logger;
   readonly metrics: Metrics | null;
+  readonly bufferPool: BufferPool | null;
 
   /** The initial slot that the chain is started with */
   readonly anchorStateLatestBlockSlot: Slot;
@@ -142,6 +145,10 @@ export interface IBeaconChain {
   getHeadStateAtCurrentEpoch(regenCaller: RegenCaller): Promise<CachedBeaconStateAllForks>;
   getHeadStateAtEpoch(epoch: Epoch, regenCaller: RegenCaller): Promise<CachedBeaconStateAllForks>;
 
+  getHistoricalStateBySlot(
+    slot: Slot
+  ): Promise<{state: Uint8Array; executionOptimistic: boolean; finalized: boolean} | null>;
+
   /** Returns a local state canonical at `slot` */
   getStateBySlot(
     slot: Slot,
@@ -156,6 +163,10 @@ export interface IBeaconChain {
   getStateByCheckpoint(
     checkpoint: CheckpointWithHex
   ): {state: BeaconStateAllForks; executionOptimistic: boolean; finalized: boolean} | null;
+  /** Return state bytes by checkpoint */
+  getStateOrBytesByCheckpoint(
+    checkpoint: CheckpointWithHex
+  ): Promise<{state: CachedBeaconStateAllForks | Uint8Array; executionOptimistic: boolean; finalized: boolean} | null>;
 
   /**
    * Since we can have multiple parallel chains,
@@ -194,7 +205,7 @@ export interface IBeaconChain {
 
   getStatus(): phase0.Status;
 
-  recomputeForkChoiceHead(): ProtoBlock;
+  recomputeForkChoiceHead(caller: ForkchoiceCaller): ProtoBlock;
 
   /** When proposerBoostReorg is enabled, this is called at slot n-1 to predict the head block to build on if we are proposing at slot n */
   predictProposerHead(slot: Slot): ProtoBlock;

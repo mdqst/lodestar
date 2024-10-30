@@ -1,6 +1,6 @@
 import {ForkName} from "@lodestar/params";
 import {KZGCommitment, Blob, KZGProof} from "@lodestar/types/deneb";
-import {Root, RootHex, capella, Wei, ExecutionPayload} from "@lodestar/types";
+import {Root, RootHex, capella, Wei, ExecutionPayload, ExecutionRequests} from "@lodestar/types";
 
 import {DATA} from "../../eth1/provider/utils.js";
 import {PayloadIdCache, PayloadId, WithdrawalV1} from "./payloadIdCache.js";
@@ -36,6 +36,26 @@ export enum ExecutionEngineState {
   SYNCING = "SYNCING",
   SYNCED = "SYNCED",
   AUTH_FAILED = "AUTH_FAILED",
+}
+
+/**
+ * Client code as defined in https://github.com/ethereum/execution-apis/blob/v1.0.0-beta.4/src/engine/identification.md#clientcode
+ * ClientCode.XX is dedicated to other clients which do not have their own code
+ */
+export enum ClientCode {
+  BU = "BU", // besu
+  EJ = "EJ", // ethereumJS
+  EG = "EG", // erigon
+  GE = "GE", // go-ethereum
+  GR = "GR", // grandine
+  LH = "LH", // lighthouse
+  LS = "LS", // lodestar
+  NM = "NM", // nethermind
+  NB = "NB", // nimbus
+  TK = "TK", // teku
+  PM = "PM", // prysm
+  RH = "RH", // reth
+  XX = "XX", // unknown
 }
 
 export type ExecutePayloadResponse =
@@ -80,6 +100,13 @@ export type BlobsBundle = {
   proofs: KZGProof[];
 };
 
+export type ClientVersion = {
+  code: ClientCode;
+  name: string;
+  version: string;
+  commit: string;
+};
+
 export type VersionedHashes = Uint8Array[];
 
 /**
@@ -90,6 +117,8 @@ export type VersionedHashes = Uint8Array[];
  */
 export interface IExecutionEngine {
   readonly state: ExecutionEngineState;
+
+  readonly clientVersion?: ClientVersion | null;
 
   payloadIdCache: PayloadIdCache;
   /**
@@ -105,7 +134,8 @@ export interface IExecutionEngine {
     fork: ForkName,
     executionPayload: ExecutionPayload,
     versionedHashes?: VersionedHashes,
-    parentBeaconBlockRoot?: Root
+    parentBeaconBlockRoot?: Root,
+    executionRequests?: ExecutionRequests
   ): Promise<ExecutePayloadResponse>;
 
   /**
@@ -142,10 +172,11 @@ export interface IExecutionEngine {
     executionPayload: ExecutionPayload;
     executionPayloadValue: Wei;
     blobsBundle?: BlobsBundle;
+    executionRequests?: ExecutionRequests;
     shouldOverrideBuilder?: boolean;
   }>;
 
-  getPayloadBodiesByHash(blockHash: DATA[]): Promise<(ExecutionPayloadBody | null)[]>;
+  getPayloadBodiesByHash(fork: ForkName, blockHash: DATA[]): Promise<(ExecutionPayloadBody | null)[]>;
 
-  getPayloadBodiesByRange(start: number, count: number): Promise<(ExecutionPayloadBody | null)[]>;
+  getPayloadBodiesByRange(fork: ForkName, start: number, count: number): Promise<(ExecutionPayloadBody | null)[]>;
 }

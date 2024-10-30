@@ -1,6 +1,7 @@
 import {describe, beforeAll, afterAll, it, expect, vi} from "vitest";
 import {createBeaconConfig} from "@lodestar/config";
 import {chainConfig as chainConfigDef} from "@lodestar/config/default";
+import {routes} from "@lodestar/api";
 import {ApiClient, getClient} from "@lodestar/api/beacon";
 import {sleep} from "@lodestar/utils";
 import {LogLevel, testLogger} from "../../../../../utils/logger.js";
@@ -8,7 +9,7 @@ import {getDevBeaconNode} from "../../../../../utils/node/beacon.js";
 import {BeaconNode} from "../../../../../../src/node/nodejs.js";
 import {getAndInitDevValidators} from "../../../../../utils/node/validator.js";
 
-describe("beacon node api", function () {
+describe("beacon node api", () => {
   vi.setConfig({testTimeout: 60_000});
 
   const restPort = 9596;
@@ -46,9 +47,9 @@ describe("beacon node api", function () {
     it("should return valid syncing status", async () => {
       const res = await client.node.getSyncingStatus();
 
-      expect(res.value()).toEqual({
-        headSlot: "0",
-        syncDistance: "0",
+      expect(res.value()).toEqual<routes.node.SyncingStatus>({
+        headSlot: 0,
+        syncDistance: 0,
         isSyncing: false,
         isOptimistic: false,
         elOffline: false,
@@ -66,9 +67,7 @@ describe("beacon node api", function () {
       const bnElOffline = await getDevBeaconNode({
         params: {
           ...chainConfigDef,
-          // eslint-disable-next-line @typescript-eslint/naming-convention
           ALTAIR_FORK_EPOCH: 0,
-          // eslint-disable-next-line @typescript-eslint/naming-convention
           BELLATRIX_FORK_EPOCH: 0,
         },
         options: {

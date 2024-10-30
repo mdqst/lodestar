@@ -17,6 +17,8 @@ import {
   LightClientFinalityUpdate,
   LightClientOptimisticUpdate,
   LightClientUpdate,
+  SignedAggregateAndProof,
+  WithBytes,
 } from "@lodestar/types";
 import {routes} from "@lodestar/api";
 import {ResponseIncoming} from "@lodestar/reqresp";
@@ -27,7 +29,7 @@ import {IBeaconDb} from "../db/interface.js";
 import {PeerIdStr, peerIdToString} from "../util/peerId.js";
 import {IClock} from "../util/clock.js";
 import {NetworkOptions} from "./options.js";
-import {WithBytes, INetwork} from "./interface.js";
+import {INetwork} from "./interface.js";
 import {ReqRespMethod} from "./reqresp/index.js";
 import {GossipHandlers, GossipTopicMap, GossipType, GossipTypeMap} from "./gossip/index.js";
 import {PeerAction, PeerScoreStats} from "./peers/index.js";
@@ -316,7 +318,7 @@ export class Network implements INetwork {
     });
   }
 
-  async publishBeaconAggregateAndProof(aggregateAndProof: phase0.SignedAggregateAndProof): Promise<number> {
+  async publishBeaconAggregateAndProof(aggregateAndProof: SignedAggregateAndProof): Promise<number> {
     const fork = this.config.getForkName(aggregateAndProof.message.aggregate.data.slot);
     return this.publishGossip<GossipType.beacon_aggregate_and_proof>(
       {type: GossipType.beacon_aggregate_and_proof, fork},

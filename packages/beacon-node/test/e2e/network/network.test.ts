@@ -9,21 +9,17 @@ import {connect, disconnect, onPeerConnect, onPeerDisconnect} from "../../utils/
 import {getNetworkForTest} from "../../utils/networkWithMockDb.js";
 import {getValidPeerId} from "../../utils/peer.js";
 
-describe(
-  "network / main thread",
-  function () {
-    runTests({useWorker: false});
-  },
-  {timeout: 3000}
-);
+describe("network / main thread", () => {
+  vi.setConfig({testTimeout: 3000});
 
-describe(
-  "network / worker",
-  function () {
-    runTests({useWorker: true});
-  },
-  {timeout: 10_000}
-);
+  runTests({useWorker: false});
+});
+
+describe("network / worker", () => {
+  vi.setConfig({testTimeout: 10_000});
+
+  runTests({useWorker: true});
+});
 
 function runTests({useWorker}: {useWorker: boolean}): void {
   const afterEachCallbacks: (() => Promise<void> | void)[] = [];
@@ -42,7 +38,6 @@ function runTests({useWorker}: {useWorker: boolean}): void {
   });
   afterEach(() => controller.abort());
 
-  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   async function createTestNode(nodeName: string) {
     const [network, closeAll] = await getNetworkForTest(nodeName, config, {opts: {useWorker}});
 
@@ -71,14 +66,14 @@ function runTests({useWorker}: {useWorker: boolean}): void {
     expect(networkIdentity.peerId).toBe(network.peerId.toString());
   });
 
-  it("should create a peer on connect", async function () {
+  it("should create a peer on connect", async () => {
     const [netA, netB] = await createTestNodesAB();
     await Promise.all([onPeerConnect(netA), onPeerConnect(netB), connect(netA, netB)]);
     expect(netA.getConnectedPeerCount()).toBe(1);
     expect(netB.getConnectedPeerCount()).toBe(1);
   });
 
-  it("should delete a peer on disconnect", async function () {
+  it("should delete a peer on disconnect", async () => {
     const [netA, netB] = await createTestNodesAB();
     const connected = Promise.all([onPeerConnect(netA), onPeerConnect(netB)]);
     await connect(netA, netB);
@@ -97,9 +92,9 @@ function runTests({useWorker}: {useWorker: boolean}): void {
 
   // Current implementation of discv5 consumer doesn't allow to deterministically force a peer to be found
   // a random find node lookup can yield no results if there are too few peers in the DHT
-  it.todo("should connect to new peer by subnet", async function () {});
+  it.todo("should connect to new peer by subnet", async () => {});
 
-  it("Should goodbye peers on stop", async function () {
+  it("Should goodbye peers on stop", async () => {
     const [netA, netB] = await createTestNodesAB();
 
     const connected = Promise.all([onPeerConnect(netA), onPeerConnect(netB)]);
@@ -111,11 +106,11 @@ function runTests({useWorker}: {useWorker: boolean}): void {
 
     // NetworkEvent.reqRespRequest does not work on worker thread
     // so we only test the peerDisconnected event
-    const onGoodbyeNetB = useWorker ? null : vi.fn<[phase0.Goodbye, PeerId]>();
+    const onGoodbyeNetB = useWorker ? null : vi.fn<(message: phase0.Goodbye, peerId: PeerId) => void>();
     netB.events.on(NetworkEvent.reqRespRequest, ({request, peer}) => {
       if (request.method === ReqRespMethod.Goodbye && onGoodbyeNetB) onGoodbyeNetB(request.body, peer);
     });
-    const onDisconnectNetB = vi.fn<[string]>();
+    const onDisconnectNetB = vi.fn<(_: string) => void>();
     netB.events.on(NetworkEvent.peerDisconnected, ({peer}) => {
       onDisconnectNetB(peer);
     });

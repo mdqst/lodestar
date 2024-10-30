@@ -26,7 +26,6 @@ EIPs
 EL
 ENR
 ENRs
-ESLint
 ETH
 Edgington
 Erigon
@@ -45,6 +44,7 @@ Grafana
 Grandine
 HTTPS
 HackMD
+Hashicorp
 Homebrew
 IPFS
 IPv
@@ -54,6 +54,7 @@ JSObjects
 JWT
 KDE
 Kubernetes
+Kurtosis
 LGPL
 LGPLv
 LMD
@@ -102,6 +103,7 @@ backfill
 beaconcha
 blockRoot
 blockchain
+blst
 bootnode
 bootnodes
 bundlers
@@ -139,6 +141,7 @@ ephemery
 ethers
 flamegraph
 flamegraphs
+floodsub
 getNetworkIdentity
 gnosis
 heapdump
@@ -160,6 +163,7 @@ malloc
 mdns
 merkle
 merkleization
+mmeshsub
 monorepo
 multiaddr
 multifork
@@ -171,6 +175,7 @@ orchestrator
 osx
 overriden
 params
+performant
 pid
 plaintext
 pre
@@ -178,6 +183,7 @@ premined
 produceBlockV
 protolambda
 prover
+pubsub
 repo
 repos
 req
@@ -204,6 +210,7 @@ util
 utils
 validator
 validators
+verifier
 vite
 vitest
 webpack

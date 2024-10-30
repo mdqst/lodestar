@@ -5,9 +5,10 @@ import {ssz as altair} from "./altair/index.js";
 import {ssz as bellatrix} from "./bellatrix/index.js";
 import {ssz as capella} from "./capella/index.js";
 import {ssz as deneb} from "./deneb/index.js";
+import {ssz as electra} from "./electra/index.js";
 
 export * from "./primitive/sszTypes.js";
-export {phase0, altair, bellatrix, capella, deneb};
+export {phase0, altair, bellatrix, capella, deneb, electra};
 
 /**
  * Index the ssz types that differ by fork
@@ -19,12 +20,14 @@ const typesByFork = {
   [ForkName.bellatrix]: {...phase0, ...altair, ...bellatrix},
   [ForkName.capella]: {...phase0, ...altair, ...bellatrix, ...capella},
   [ForkName.deneb]: {...phase0, ...altair, ...bellatrix, ...capella, ...deneb},
+  [ForkName.electra]: {...phase0, ...altair, ...bellatrix, ...capella, ...deneb, ...electra},
 };
 
 /**
  * A type of union of forks must accept as any parameter the UNION of all fork types.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
+// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 type UnionSSZForksTypeOf<UnionOfForkTypes extends ContainerType<any>> = CompositeType<
   ValueOf<UnionOfForkTypes>,
   CompositeView<UnionOfForkTypes>,
@@ -39,11 +42,9 @@ type SSZTypesByFork = {
 
 export type SSZTypesFor<F extends ForkName, K extends keyof SSZTypesByFork[F] | void = void> = K extends void
   ? // It compiles fine, need to debug the error
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-expect-error
     {[K2 in keyof SSZTypesByFork[F]]: UnionSSZForksTypeOf<SSZTypesByFork[F][K2]>}
   : // It compiles fine, need to debug the error
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-expect-error
     UnionSSZForksTypeOf<SSZTypesByFork[F][Exclude<K, void>]>;
 

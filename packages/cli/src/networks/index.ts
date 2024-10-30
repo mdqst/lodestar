@@ -3,12 +3,17 @@ import got from "got";
 import {ENR} from "@chainsafe/enr";
 import {SLOTS_PER_EPOCH} from "@lodestar/params";
 import {HttpHeader, MediaType, WireFormat, getClient} from "@lodestar/api";
-import {getStateTypeFromBytes} from "@lodestar/beacon-node";
+import {getStateSlotFromBytes} from "@lodestar/beacon-node";
 import {ChainConfig, ChainForkConfig} from "@lodestar/config";
 import {Checkpoint} from "@lodestar/types/phase0";
 import {Slot} from "@lodestar/types";
-import {fromHex, callFnWhenAwait, Logger} from "@lodestar/utils";
-import {BeaconStateAllForks, getLatestBlockRoot, computeCheckpointEpochAtStateSlot} from "@lodestar/state-transition";
+import {fromHex, callFnWhenAwait, Logger, formatBytes} from "@lodestar/utils";
+import {
+  BeaconStateAllForks,
+  getLatestBlockRoot,
+  computeCheckpointEpochAtStateSlot,
+  loadState,
+} from "@lodestar/state-transition";
 import {parseBootnodesFile} from "../util/format.js";
 import * as mainnet from "./mainnet.js";
 import * as dev from "./dev.js";
@@ -104,7 +109,6 @@ export async function getNetworkBootnodes(network: NetworkName): Promise<string[
       const bootEnrs = await fetchBootnodes(network);
       bootnodes.push(...bootEnrs);
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error(`Error fetching latest bootnodes: ${(e as Error).stack}`);
     }
   }
@@ -122,7 +126,7 @@ export function readBootnodes(bootnodesFilePath: string): string[] {
   for (const enrStr of bootnodes) {
     try {
       ENR.decodeTxt(enrStr);
-    } catch (e) {
+    } catch (_e) {
       throw new Error(`Invalid ENR found in ${bootnodesFilePath}:\n    ${enrStr}`);
     }
   }
@@ -140,8 +144,12 @@ export function readBootnodes(bootnodesFilePath: string): string[] {
 export async function fetchWeakSubjectivityState(
   config: ChainForkConfig,
   logger: Logger,
-  {checkpointSyncUrl, wssCheckpoint}: {checkpointSyncUrl: string; wssCheckpoint?: string}
-): Promise<{wsState: BeaconStateAllForks; wsCheckpoint: Checkpoint}> {
+  {checkpointSyncUrl, wssCheckpoint}: {checkpointSyncUrl: string; wssCheckpoint?: string},
+  {
+    lastDbState,
+    lastDbValidatorsBytes,
+  }: {lastDbState: BeaconStateAllForks | null; lastDbValidatorsBytes: Uint8Array | null}
+): Promise<{wsState: BeaconStateAllForks; wsStateBytes: Uint8Array; wsCheckpoint: Checkpoint}> {
   try {
     let wsCheckpoint: Checkpoint | null;
     let stateId: Slot | "finalized";
@@ -169,7 +177,7 @@ export async function fetchWeakSubjectivityState(
       }
     );
 
-    const stateBytes = await callFnWhenAwait(
+    const wsStateBytes = await callFnWhenAwait(
       getStatePromise,
       () => logger.info("Download in progress, please wait..."),
       GET_STATE_LOG_INTERVAL
@@ -177,13 +185,23 @@ export async function fetchWeakSubjectivityState(
       return res.ssz();
     });
 
-    logger.info("Download completed", {stateId});
+    const wsSlot = getStateSlotFromBytes(wsStateBytes);
+    const logData = {stateId, size: formatBytes(wsStateBytes.length)};
+    logger.info("Download completed", typeof stateId === "number" ? logData : {...logData, slot: wsSlot});
     // It should not be required to get fork type from bytes but Checkpointz does not return
     // Eth-Consensus-Version header, see https://github.com/ethpandaops/checkpointz/issues/164
-    const wsState = getStateTypeFromBytes(config, stateBytes).deserializeToViewDU(stateBytes);
+    let wsState: BeaconStateAllForks;
+    if (lastDbState && lastDbValidatorsBytes) {
+      // use lastDbState to load wsState if possible to share the same state tree
+      wsState = loadState(config, lastDbState, wsStateBytes, lastDbValidatorsBytes).state;
+    } else {
+      const stateType = config.getForkTypes(wsSlot).BeaconState;
+      wsState = stateType.deserializeToViewDU(wsStateBytes);
+    }
 
     return {
       wsState,
+      wsStateBytes,
       wsCheckpoint: wsCheckpoint ?? getCheckpointFromState(wsState),
     };
   } catch (e) {
@@ -192,7 +210,7 @@ export async function fetchWeakSubjectivityState(
 }
 
 export function getCheckpointFromArg(checkpointStr: string): Checkpoint {
-  const checkpointRegex = new RegExp("^(?:0x)?([0-9a-f]{64}):([0-9]+)$");
+  const checkpointRegex = /^(?:0x)?([0-9a-f]{64}):([0-9]+)$/;
   const match = checkpointRegex.exec(checkpointStr.toLowerCase());
   if (!match) {
     throw new Error(`Could not parse checkpoint string: ${checkpointStr}`);

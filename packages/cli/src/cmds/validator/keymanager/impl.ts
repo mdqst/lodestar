@@ -1,5 +1,4 @@
 import {Keystore} from "@chainsafe/bls-keystore";
-import {fromHexString} from "@chainsafe/ssz";
 import {SecretKey} from "@chainsafe/blst";
 import {
   DeleteRemoteKeyStatus,
@@ -21,7 +20,7 @@ import {KeymanagerApiMethods as Api} from "@lodestar/api/keymanager/server";
 import {Interchange, SignerType, Validator} from "@lodestar/validator";
 import {ApiError} from "@lodestar/api/server";
 import {Epoch} from "@lodestar/types";
-import {isValidHttpUrl} from "@lodestar/utils";
+import {fromHex, isValidHttpUrl} from "@lodestar/utils";
 import {getPubkeyHexFromKeystore, isValidatePubkeyHex} from "../../../util/format.js";
 import {parseFeeRecipient} from "../../../util/index.js";
 import {DecryptKeystoresThreadPool} from "./decryptKeystores/index.js";
@@ -60,7 +59,11 @@ export class KeymanagerApi implements Api {
   }
 
   async getGraffiti({pubkey}: {pubkey: PubkeyHex}): ReturnType<Api["getGraffiti"]> {
-    return {data: {pubkey, graffiti: this.validator.validatorStore.getGraffiti(pubkey)}};
+    const graffiti = this.validator.validatorStore.getGraffiti(pubkey);
+    if (graffiti === undefined) {
+      throw new ApiError(404, `No graffiti for pubkey ${pubkey}`);
+    }
+    return {data: {pubkey, graffiti}};
   }
 
   async setGraffiti({pubkey, graffiti}: GraffitiData): ReturnType<Api["setGraffiti"]> {
@@ -220,7 +223,7 @@ export class KeymanagerApi implements Api {
       }
     }
 
-    const pubkeysBytes = pubkeys.map((pubkeyHex) => fromHexString(pubkeyHex));
+    const pubkeysBytes = pubkeys.map((pubkeyHex) => fromHex(pubkeyHex));
 
     const interchangeV5 = await this.validator.exportInterchange(pubkeysBytes, {
       version: "5",
@@ -375,7 +378,6 @@ export class KeymanagerApi implements Api {
 function ensureJSON<T>(strOrJson: string | T): T {
   if (typeof strOrJson === "string") {
     return JSON.parse(strOrJson) as T;
-  } else {
-    return strOrJson;
   }
+  return strOrJson;
 }

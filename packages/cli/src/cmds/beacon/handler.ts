@@ -39,7 +39,7 @@ export async function beaconHandler(args: BeaconArgs & GlobalArgs): Promise<void
   const heapSizeLimit = getHeapStatistics().heap_size_limit;
   if (heapSizeLimit < EIGHT_GB) {
     logger.warn(
-      `Node.js heap size limit is too low, consider increasing it to at least ${EIGHT_GB}. See https://chainsafe.github.io/lodestar/faqs#running-a-node for more details.`
+      `Node.js heap size limit is too low, consider increasing it to at least ${EIGHT_GB}. See https://chainsafe.github.io/lodestar/faqs/#running-a-beacon-node for more details.`
     );
   }
 
@@ -158,7 +158,6 @@ export async function beaconHandler(args: BeaconArgs & GlobalArgs): Promise<void
 }
 
 /** Separate function to simplify unit testing of options merging */
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export async function beaconHandlerInit(args: BeaconArgs & GlobalArgs) {
   const {config, network} = getBeaconConfigFromArgs(args);
 
@@ -173,15 +172,7 @@ export async function beaconHandlerInit(args: BeaconArgs & GlobalArgs) {
   beaconNodeOptions.set({metrics: {metadata: {version, commit, network}}});
   beaconNodeOptions.set({metrics: {validatorMonitorLogs: args.validatorMonitorLogs}});
   // Add detailed version string for API node/version endpoint
-  beaconNodeOptions.set({api: {version}});
-
-  // Combine bootnodes from different sources
-  const bootnodes = (beaconNodeOptions.get().network?.discv5?.bootEnrs ?? []).concat(
-    args.bootnodesFile ? readBootnodes(args.bootnodesFile) : [],
-    isKnownNetworkName(network) ? await getNetworkBootnodes(network) : []
-  );
-  // Deduplicate and set combined bootnodes
-  beaconNodeOptions.set({network: {discv5: {bootEnrs: [...new Set(bootnodes)]}}});
+  beaconNodeOptions.set({api: {commit, version}});
 
   // Set known depositContractDeployBlock
   if (isKnownNetworkName(network)) {
@@ -191,15 +182,26 @@ export async function beaconHandlerInit(args: BeaconArgs & GlobalArgs) {
 
   const logger = initLogger(args, beaconPaths.dataDir, config);
   const {peerId, enr} = await initPeerIdAndEnr(args, beaconPaths.beaconDir, logger);
-  // Inject ENR to beacon options
-  beaconNodeOptions.set({network: {discv5: {enr: enr.encodeTxt(), config: {enrUpdate: !enr.ip && !enr.ip6}}}});
+
+  if (args.discv5 !== false) {
+    // Inject ENR to beacon options
+    beaconNodeOptions.set({network: {discv5: {enr: enr.encodeTxt(), config: {enrUpdate: !enr.ip && !enr.ip6}}}});
+
+    // Combine bootnodes from different sources
+    const bootnodes = (beaconNodeOptions.get().network?.discv5?.bootEnrs ?? []).concat(
+      args.bootnodesFile ? readBootnodes(args.bootnodesFile) : [],
+      isKnownNetworkName(network) ? await getNetworkBootnodes(network) : []
+    );
+    // Deduplicate and set combined bootnodes
+    beaconNodeOptions.set({network: {discv5: {bootEnrs: [...new Set(bootnodes)]}}});
+  }
 
   if (args.disableLightClientServer) {
     beaconNodeOptions.set({chain: {disableLightClientServer: true}});
   }
 
   if (args.private) {
-    beaconNodeOptions.set({network: {private: true}});
+    beaconNodeOptions.set({network: {private: true}, api: {private: true}});
   } else {
     const versionStr = `Lodestar/${version}`;
     const simpleVersionStr = version.split("/")[0];
@@ -209,6 +211,8 @@ export async function beaconHandlerInit(args: BeaconArgs & GlobalArgs) {
     beaconNodeOptions.set({executionBuilder: {userAgent: versionStr}});
     // Set jwt version with version string
     beaconNodeOptions.set({executionEngine: {jwtVersion: versionStr}, eth1: {jwtVersion: versionStr}});
+    // Set commit and version for ClientVersion
+    beaconNodeOptions.set({executionEngine: {commit, version}});
   }
 
   // Render final options

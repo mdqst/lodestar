@@ -1,5 +1,5 @@
 import {Signer, SignerLocal, SignerRemote, SignerType} from "@lodestar/validator";
-import {LogLevel, Logger, toSafePrintableUrl} from "@lodestar/utils";
+import {LogLevel, Logger, toPrintableUrl} from "@lodestar/utils";
 import {YargsError} from "../../../util/errors.js";
 import {IValidatorCliArgs} from "../options.js";
 
@@ -29,7 +29,7 @@ export function logSigners(logger: Pick<Logger, LogLevel.info>, signers: Signer[
   }
 
   for (const {url, pubkeys} of groupRemoteSignersByUrl(remoteSigners)) {
-    logger.info(`Remote signers on URL: ${toSafePrintableUrl(url)}`);
+    logger.info(`Remote signers on URL: ${toPrintableUrl(url)}`);
     for (const pubkey of pubkeys) {
       logger.info(pubkey);
     }
@@ -60,11 +60,11 @@ function groupRemoteSignersByUrl(remoteSigners: SignerRemote[]): {url: string; p
  * is connected with fetching enabled, but otherwise exit the process and suggest a different configuration.
  */
 export function warnOrExitNoSigners(args: IValidatorCliArgs, logger: Pick<Logger, LogLevel.warn>): void {
-  if (args["keymanager"] && !args["externalSigner.fetch"]) {
+  if (args.keymanager && !args["externalSigner.fetch"]) {
     logger.warn("No local keystores or remote keys found with current args, expecting to be added via keymanager");
-  } else if (!args["keymanager"] && args["externalSigner.fetch"]) {
+  } else if (!args.keymanager && args["externalSigner.fetch"]) {
     logger.warn("No remote keys found with current args, expecting to be added to external signer and fetched later");
-  } else if (args["keymanager"] && args["externalSigner.fetch"]) {
+  } else if (args.keymanager && args["externalSigner.fetch"]) {
     logger.warn(
       "No local keystores or remote keys found with current args, expecting to be added via keymanager or fetched from external signer later"
     );

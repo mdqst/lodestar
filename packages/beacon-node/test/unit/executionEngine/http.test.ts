@@ -9,6 +9,7 @@ import {
   serializeExecutionPayload,
   serializeExecutionPayloadBody,
 } from "../../../src/execution/engine/types.js";
+import {RpcPayload} from "../../../src/eth1/interface.js";
 import {numToQuantity} from "../../../src/eth1/provider/utils.js";
 
 describe("ExecutionEngine / http", () => {
@@ -29,6 +30,10 @@ describe("ExecutionEngine / http", () => {
     const server = fastify({logger: false});
 
     server.post("/", async (req) => {
+      if ((req.body as RpcPayload).method === "engine_getClientVersionV1") {
+        // Ignore client version requests
+        return [];
+      }
       reqJsonRpcPayload = req.body;
       delete (reqJsonRpcPayload as {id?: number}).id;
       return returnValue;
@@ -214,7 +219,7 @@ describe("ExecutionEngine / http", () => {
 
     returnValue = response;
 
-    const res = await executionEngine.getPayloadBodiesByHash(reqBlockHashes);
+    const res = await executionEngine.getPayloadBodiesByHash(ForkName.bellatrix, reqBlockHashes);
 
     expect(reqJsonRpcPayload).toEqual(request);
     expect(res.map(serializeExecutionPayloadBody)).toEqual(response.result);
@@ -263,7 +268,7 @@ describe("ExecutionEngine / http", () => {
 
     returnValue = response;
 
-    const res = await executionEngine.getPayloadBodiesByRange(startBlockNumber, blockCount);
+    const res = await executionEngine.getPayloadBodiesByRange(ForkName.bellatrix, startBlockNumber, blockCount);
 
     expect(reqJsonRpcPayload).toEqual(request);
     expect(res.map(serializeExecutionPayloadBody)).toEqual(response.result);
