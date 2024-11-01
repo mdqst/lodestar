@@ -1,6 +1,6 @@
 import {BitArray} from "@chainsafe/ssz";
 import {Signature, aggregateSignatures} from "@chainsafe/blst";
-import {Slot, RootHex, isElectraAttestation, Attestation} from "@lodestar/types";
+import {Slot, RootHex, Attestation, SingleAttestation, isElectraSingleAttestation} from "@lodestar/types";
 import {MapDef, assert} from "@lodestar/utils";
 import {isForkPostElectra} from "@lodestar/params";
 import {ChainForkConfig} from "@lodestar/config";
@@ -105,7 +105,13 @@ export class AttestationPool {
    * - Valid committeeIndex
    * - Valid data
    */
-  add(committeeIndex: CommitteeIndex, attestation: Attestation, attDataRootHex: RootHex): InsertOutcome {
+  add(
+    committeeIndex: CommitteeIndex,
+    attestation: SingleAttestation,
+    attDataRootHex: RootHex,
+    aggregationBits: BitArray | null,
+    committeeBits: BitArray | null
+  ): InsertOutcome {
     const slot = attestation.data.slot;
     const fork = this.config.getForkName(slot);
     const lowestPermissibleSlot = this.lowestPermissibleSlot;
@@ -129,9 +135,9 @@ export class AttestationPool {
     if (isForkPostElectra(fork)) {
       // Electra only: this should not happen because attestation should be validated before reaching this
       assert.notNull(committeeIndex, "Committee index should not be null in attestation pool post-electra");
-      assert.true(isElectraAttestation(attestation), "Attestation should be type electra.Attestation");
+      assert.true(isElectraSingleAttestation(attestation), "Attestation should be type electra.SingleAttestation");
     } else {
-      assert.true(!isElectraAttestation(attestation), "Attestation should be type phase0.Attestation");
+      assert.true(!isElectraSingleAttestation(attestation), "Attestation should be type phase0.Attestation");
       committeeIndex = null; // For pre-electra, committee index info is encoded in attDataRootIndex
     }
 
@@ -144,10 +150,10 @@ export class AttestationPool {
     const aggregate = aggregateByIndex.get(committeeIndex);
     if (aggregate) {
       // Aggregate mutating
-      return aggregateAttestationInto(aggregate, attestation);
+      return aggregateAttestationInto(aggregate, attestation, aggregationBits);
     } else {
       // Create new aggregate
-      aggregateByIndex.set(committeeIndex, attestationToAggregate(attestation));
+      aggregateByIndex.set(committeeIndex, attestationToAggregate(attestation, aggregationBits, committeeBits));
       return InsertOutcome.NewData;
     }
   }
@@ -217,8 +223,19 @@ export class AttestationPool {
 /**
  * Aggregate a new attestation into `aggregate` mutating it
  */
-function aggregateAttestationInto(aggregate: AggregateFast, attestation: Attestation): InsertOutcome {
-  const bitIndex = attestation.aggregationBits.getSingleTrueBit();
+function aggregateAttestationInto(
+  aggregate: AggregateFast,
+  attestation: SingleAttestation,
+  aggregationBits: BitArray | null
+): InsertOutcome {
+  let bitIndex;
+
+  if (isElectraSingleAttestation(attestation)) {
+    assert.notNull(aggregationBits, "aggregationBits missing post-electra");
+    bitIndex = aggregationBits.getSingleTrueBit();
+  } else {
+    bitIndex = attestation.aggregationBits.getSingleTrueBit();
+  }
 
   // Should never happen, attestations are verified against this exact condition before
   assert.notNull(bitIndex, "Invalid attestation in pool, not exactly one bit set");
@@ -235,13 +252,18 @@ function aggregateAttestationInto(aggregate: AggregateFast, attestation: Attesta
 /**
  * Format `contribution` into an efficient `aggregate` to add more contributions in with aggregateContributionInto()
  */
-function attestationToAggregate(attestation: Attestation): AggregateFast {
-  if (isElectraAttestation(attestation)) {
+function attestationToAggregate(
+  attestation: SingleAttestation,
+  aggregationBits: BitArray | null,
+  committeeBits: BitArray | null
+): AggregateFast {
+  if (isElectraSingleAttestation(attestation)) {
+    assert.notNull(aggregationBits, "aggregationBits missing post-electra to generate aggregate");
+    assert.notNull(committeeBits, "committeeBits missing post-electra to generate aggregate");
     return {
       data: attestation.data,
-      // clone because it will be mutated
-      aggregationBits: attestation.aggregationBits.clone(),
-      committeeBits: attestation.committeeBits,
+      aggregationBits,
+      committeeBits,
       signature: signatureFromBytesNoCheck(attestation.signature),
     };
   }

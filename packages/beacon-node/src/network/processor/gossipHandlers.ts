@@ -633,7 +633,8 @@ function getBatchHandlers(modules: ValidatorFnsModules, options: GossipHandlerOp
         results.push(null);
 
         // Handler
-        const {indexedAttestation, attDataRootHex, attestation, committeeIndex} = validationResult.result;
+        const {indexedAttestation, attDataRootHex, attestation, committeeIndex, aggregationBits, committeeBits} =
+          validationResult.result;
         metrics?.registerGossipUnaggregatedAttestation(gossipHandlerParams[i].seenTimestampSec, indexedAttestation);
 
         try {
@@ -641,7 +642,13 @@ function getBatchHandlers(modules: ValidatorFnsModules, options: GossipHandlerOp
           // but don't add to attestation pool, to save CPU and RAM
           if (aggregatorTracker.shouldAggregate(subnet, indexedAttestation.data.slot)) {
             // TODO: modify after we change attestationPool due to SingleAttestation
-            const insertOutcome = chain.attestationPool.add(committeeIndex, attestation, attDataRootHex);
+            const insertOutcome = chain.attestationPool.add(
+              committeeIndex,
+              attestation,
+              attDataRootHex,
+              aggregationBits,
+              committeeBits
+            );
             metrics?.opPool.attestationPoolInsertOutcome.inc({insertOutcome});
           }
         } catch (e) {
