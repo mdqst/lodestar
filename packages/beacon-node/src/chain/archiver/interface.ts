@@ -39,7 +39,6 @@ export type FinalizedStats = {
 };
 
 export interface StateArchiveStrategy {
-  onCheckpoint(stateRoot: RootHex, metrics?: Metrics | null): Promise<void>;
-  onFinalizedCheckpoint(finalized: CheckpointWithHex, metrics?: Metrics | null): Promise<void>;
+  onCheckpoint(checkpoint: CheckpointWithHex, finalized: boolean, metrics?: Metrics | null): Promise<void>;
   maybeArchiveState(finalized: CheckpointWithHex, metrics?: Metrics | null): Promise<void>;
 }

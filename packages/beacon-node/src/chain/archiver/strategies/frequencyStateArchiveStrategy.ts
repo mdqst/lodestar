@@ -28,11 +28,11 @@ export class FrequencyStateArchiveStrategy implements StateArchiveStrategy {
     protected readonly opts: StatesArchiverOpts
   ) {}
 
-  async onFinalizedCheckpoint(finalized: CheckpointWithHex, metrics?: Metrics | null): Promise<void> {
-    await this.maybeArchiveState(finalized, metrics);
+  async onCheckpoint(checkpoint: CheckpointWithHex, finalized: boolean, metrics?: Metrics | null): Promise<void> {
+    if (finalized) {
+      await this.maybeArchiveState(checkpoint, metrics);
+    }
   }
-
-  async onCheckpoint(_stateRoot: RootHex, _metrics?: Metrics | null): Promise<void> {}
 
   /**
    * Persist states every some epochs to

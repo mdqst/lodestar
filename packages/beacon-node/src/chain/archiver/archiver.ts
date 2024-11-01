@@ -1,4 +1,4 @@
-import {Logger} from "@lodestar/utils";
+import {fromHex, Logger} from "@lodestar/utils";
 import {CheckpointWithHex} from "@lodestar/fork-choice";
 import {IBeaconDb} from "../../db/index.js";
 import {JobItemQueue} from "../../util/queue/index.js";
@@ -9,6 +9,7 @@ import {FrequencyStateArchiveStrategy} from "./strategies/frequencyStateArchiveS
 import {archiveBlocks} from "./archiveBlocks.js";
 import {StateArchiveMode, ArchiverOpts, StateArchiveStrategy} from "./interface.js";
 import {DifferentialStateArchiveStrategy} from "./strategies/diffStateArchiveStrategy.js";
+import {computeEpochAtSlot} from "@lodestar/state-transition";
 
 export const DEFAULT_STATE_ARCHIVE_MODE = StateArchiveMode.Frequency;
 
@@ -87,16 +88,23 @@ export class Archiver {
   }
 
   private onCheckpoint(): void {
-    const headStateRoot = this.chain.forkChoice.getHead().stateRoot;
+    const {stateRoot, slot} = this.chain.forkChoice.getHead();
+
     this.chain.regen.pruneOnCheckpoint(
       this.chain.forkChoice.getFinalizedCheckpoint().epoch,
       this.chain.forkChoice.getJustifiedCheckpoint().epoch,
-      headStateRoot
+      stateRoot
     );
 
-    this.statesArchiverStrategy.onCheckpoint(headStateRoot, this.metrics).catch((err) => {
-      this.logger.error("Error during state archive", {stateArchiveMode: this.stateArchiveMode}, err);
-    });
+    this.statesArchiverStrategy
+      .onCheckpoint(
+        {root: fromHex(stateRoot), rootHex: stateRoot, epoch: computeEpochAtSlot(slot)},
+        false,
+        this.metrics
+      )
+      .catch((err) => {
+        this.logger.error("Error during state archive", {stateArchiveMode: this.stateArchiveMode}, err);
+      });
   }
 
   private processFinalizedCheckpoint = async (finalized: CheckpointWithHex): Promise<void> => {
@@ -115,7 +123,7 @@ export class Archiver {
       );
       this.prevFinalized = finalized;
 
-      await this.statesArchiverStrategy.onFinalizedCheckpoint(finalized, this.metrics);
+      await this.statesArchiverStrategy.onCheckpoint(finalized, true, this.metrics);
 
       this.chain.regen.pruneOnFinalized(finalizedEpoch);
 

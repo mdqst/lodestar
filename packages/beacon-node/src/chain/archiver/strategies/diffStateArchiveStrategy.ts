@@ -16,12 +16,10 @@ export class DifferentialStateArchiveStrategy implements StateArchiveStrategy {
     }
   ) {}
 
-  onCheckpoint(_stateRoot: RootHex, _metrics?: Metrics | null): Promise<void> {
-    throw new Error("Method not implemented.");
-  }
-
-  async onFinalizedCheckpoint(finalized: CheckpointWithHex, _metrics?: Metrics | null): Promise<void> {
-    await this.maybeArchiveState(finalized);
+  async onCheckpoint(checkpoint: CheckpointWithHex, finalized: boolean, _metrics?: Metrics | null): Promise<void> {
+    if (finalized) {
+      await this.maybeArchiveState(checkpoint);
+    }
   }
 
   async maybeArchiveState(finalized: CheckpointWithHex): Promise<void> {
