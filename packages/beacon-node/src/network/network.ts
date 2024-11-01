@@ -18,6 +18,7 @@ import {
   LightClientOptimisticUpdate,
   LightClientUpdate,
   SignedAggregateAndProof,
+  SingleAttestation,
 } from "@lodestar/types";
 import {routes} from "@lodestar/api";
 import {ResponseIncoming} from "@lodestar/reqresp";
@@ -326,7 +327,7 @@ export class Network implements INetwork {
     );
   }
 
-  async publishBeaconAttestation(attestation: phase0.Attestation, subnet: number): Promise<number> {
+  async publishBeaconAttestation(attestation: SingleAttestation, subnet: number): Promise<number> {
     const fork = this.config.getForkName(attestation.data.slot);
     return this.publishGossip<GossipType.beacon_attestation>(
       {type: GossipType.beacon_attestation, fork, subnet},

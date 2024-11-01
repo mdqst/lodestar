@@ -1,7 +1,7 @@
 import {BeaconConfig, ChainForkConfig} from "@lodestar/config";
 import {LogLevel, Logger, prettyBytes, toRootHex} from "@lodestar/utils";
-import {Root, Slot, ssz, deneb, UintNum64, SignedBeaconBlock, sszTypesFor} from "@lodestar/types";
-import {ForkName, ForkSeq} from "@lodestar/params";
+import {Root, Slot, ssz, deneb, UintNum64, SignedBeaconBlock, sszTypesFor, SingleAttestation} from "@lodestar/types";
+import {ForkName, ForkPostElectra, ForkPreElectra, ForkSeq, isForkPostElectra} from "@lodestar/params";
 import {routes} from "@lodestar/api";
 import {computeTimeAtSlot} from "@lodestar/state-transition";
 import {Metrics} from "../../metrics/index.js";
@@ -37,6 +37,7 @@ import {
   AggregateAndProofValidationResult,
   validateGossipAttestationsSameAttData,
   GossipAttestation,
+  toElectraSingleAttestation,
 } from "../../chain/validation/index.js";
 import {NetworkEvent, NetworkEventBus} from "../events.js";
 import {PeerAction} from "../peers/index.js";
@@ -663,7 +664,16 @@ function getBatchHandlers(modules: ValidatorFnsModules, options: GossipHandlerOp
           }
         }
 
-        chain.emitter.emit(routes.events.EventType.attestation, attestation);
+        if (isForkPostElectra(fork)) {
+          chain.emitter.emit(routes.events.EventType.singleAttestation, attestation as SingleAttestation<ForkPostElectra>);
+        } else {
+          chain.emitter.emit(routes.events.EventType.attestation, attestation as SingleAttestation<ForkPreElectra>);
+          chain.emitter.emit(routes.events.EventType.singleAttestation, 
+            toElectraSingleAttestation(
+              attestation as SingleAttestation<ForkPreElectra>,
+              indexedAttestation.attestingIndices[0]
+            ));
+        }
       }
 
       if (batchableBls) {
