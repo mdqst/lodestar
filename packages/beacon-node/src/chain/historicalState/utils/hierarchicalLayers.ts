@@ -13,6 +13,11 @@ import {StateArchiveMode} from "../../archiver/interface.js";
  */
 export const DEFAULT_DIFF_LAYERS = "2, 8, 32, 128, 512";
 
+export type Layers = {
+  snapshotSlot: Slot;
+  diffSlots: Slot[];
+};
+
 export class HierarchicalLayers {
   private snapshotEverySlot: number;
   private diffEverySlot: number[];
@@ -77,7 +82,7 @@ export class HierarchicalLayers {
     return HistoricalStateStorageType.BlockReplay;
   }
 
-  getArchiveLayers(slot: Slot): Slot[] {
+  getArchiveLayers(slot: Slot): Layers {
     const path: Slot[] = [];
     let lastSlot: number | undefined = undefined;
 
@@ -88,7 +93,17 @@ export class HierarchicalLayers {
         path.push(newSlot);
       }
     }
-    return [...new Set(path)];
+    const diffSlots = [...new Set(path)];
+    const snapshotSlot = diffSlots.shift();
+
+    if (!snapshotSlot) {
+      throw new Error(`Can not find snapshot layer for slot=${slot}`);
+    }
+
+    return {
+      snapshotSlot,
+      diffSlots,
+    };
   }
 
   getPreviousSlotForLayer(slot: Slot, layer: number): Slot {

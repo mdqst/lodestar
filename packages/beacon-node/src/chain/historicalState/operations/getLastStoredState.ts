@@ -77,10 +77,13 @@ export async function getLastStoredState({
         };
       }
 
-      const diffStateArchive = await getDiffStateArchive(
-        {slot: lastStoredSlot, skipSlotDiff: false},
-        {db, metrics, logger, hierarchicalLayers: hierarchicalLayers, codec}
-      );
+      const diffStateArchive = await getDiffStateArchive(lastStoredSlot, {
+        db,
+        metrics,
+        logger,
+        hierarchicalLayers: hierarchicalLayers,
+        codec,
+      });
 
       if (!diffStateArchive.stateArchive) throw new Error("Can not compute the last stored state");
 

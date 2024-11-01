@@ -44,10 +44,13 @@ export async function putHistoricalState(
       break;
     }
     case HistoricalStateStorageType.Diff: {
-      const {stateArchive: diffStateArchive} = await getDiffStateArchive(
-        {slot, skipSlotDiff: true},
-        {db, metrics, logger, hierarchicalLayers, codec}
-      );
+      const {stateArchive: diffStateArchive} = await getDiffStateArchive(slot - 1, {
+        db,
+        metrics,
+        logger,
+        hierarchicalLayers,
+        codec,
+      });
 
       if (!diffStateArchive) return;
 

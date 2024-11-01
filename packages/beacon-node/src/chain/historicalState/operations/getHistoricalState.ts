@@ -23,6 +23,7 @@ export async function getHistoricalState(
   }: HierarchicalStateOperationOptions & {pubkey2index: PubkeyIndexMap}
 ): Promise<Uint8Array | null> {
   const slotType = hierarchicalLayers.getStorageType(slot, stateArchiveMode);
+  const modules = {db, config, metrics, logger, hierarchicalLayers, codec};
 
   return measure(metrics?.regenTime, {strategy: slotType}, async () => {
     const epoch = computeEpochAtSlot(slot);
@@ -30,9 +31,7 @@ export async function getHistoricalState(
 
     switch (slotType) {
       case HistoricalStateStorageType.Full: {
-        return measure(metrics?.loadSnapshotStateTime, () => {
-          return db.stateArchive.getBinary(slot);
-        });
+        return measure(metrics?.loadSnapshotStateTime, () => db.stateArchive.getBinary(slot));
       }
 
       case HistoricalStateStorageType.Snapshot: {
@@ -42,22 +41,14 @@ export async function getHistoricalState(
         });
       }
       case HistoricalStateStorageType.Diff: {
-        const {stateArchive} = await getDiffStateArchive(
-          {slot, skipSlotDiff: false},
-          {db, metrics, logger, hierarchicalLayers: hierarchicalLayers, codec}
-        );
+        const {stateArchive} = await getDiffStateArchive(slot, modules);
         return stateArchive ? stateArchiveToStateBytes(stateArchive, config) : null;
       }
 
       case HistoricalStateStorageType.BlockReplay: {
-        const {stateArchive, diffSlots} = await getDiffStateArchive(
-          {slot, skipSlotDiff: false},
-          {db, metrics, logger, hierarchicalLayers: hierarchicalLayers, codec}
-        );
+        const {stateArchive, diffSlots} = await getDiffStateArchive(slot, modules);
 
-        if (!stateArchive) {
-          return null;
-        }
+        if (!stateArchive) return null;
 
         const state = replayBlocks(
           {
@@ -65,7 +56,7 @@ export async function getHistoricalState(
             lastFullSlot: diffSlots[diffSlots.length - 1],
             lastFullStateBytes: stateArchiveToStateBytes(stateArchive, config),
           },
-          {config, db, metrics, pubkey2index}
+          {...modules, pubkey2index}
         );
 
         return state;
