@@ -6,6 +6,7 @@ import {replayBlocks} from "../utils/blockReplay.js";
 import {XDelta3Codec} from "../utils/xdelta3.js";
 import {getDiffStateArchive} from "../utils/diff.js";
 import {stateArchiveToStateBytes} from "../utils/stateArchive.js";
+import {measure} from "@lodestar/utils";
 
 export const codec: IStateDiffCodec = new XDelta3Codec();
 
@@ -21,63 +22,54 @@ export async function getHistoricalState(
     pubkey2index,
   }: HierarchicalStateOperationOptions & {pubkey2index: PubkeyIndexMap}
 ): Promise<Uint8Array | null> {
-  const regenTimer = metrics?.regenTime.startTimer();
-  const epoch = computeEpochAtSlot(slot);
   const slotType = hierarchicalLayers.getStorageType(slot, stateArchiveMode);
-  logger.verbose("Fetching state archive", {slotType, slot, epoch});
 
-  switch (slotType) {
-    case HistoricalStateStorageType.Full: {
-      const loadStateTimer = metrics?.loadSnapshotStateTime.startTimer();
-      // It's a legacy format we use raw state as full object
-      const state = await db.stateArchive.getBinary(slot);
-      loadStateTimer?.();
-      regenTimer?.({strategy: HistoricalStateStorageType.Full});
-      return state;
-    }
+  return measure(metrics?.regenTime, {strategy: slotType}, async () => {
+    const epoch = computeEpochAtSlot(slot);
+    logger.verbose("Fetching state archive", {slotType, slot, epoch});
 
-    case HistoricalStateStorageType.Snapshot: {
-      const loadStateTimer = metrics?.loadSnapshotStateTime.startTimer();
-      const stateArchive = await db.hierarchicalStateArchiveRepository.get(slot);
-
-      const state = stateArchive ? stateArchiveToStateBytes(stateArchive, config) : null;
-
-      loadStateTimer?.();
-      regenTimer?.({strategy: HistoricalStateStorageType.Snapshot});
-      return state;
-    }
-    case HistoricalStateStorageType.Diff: {
-      const {stateArchive} = await getDiffStateArchive(
-        {slot, skipSlotDiff: false},
-        {db, metrics, logger, hierarchicalLayers: hierarchicalLayers, codec}
-      );
-      regenTimer?.({strategy: HistoricalStateStorageType.Diff});
-
-      return stateArchive ? stateArchiveToStateBytes(stateArchive, config) : null;
-    }
-    case HistoricalStateStorageType.BlockReplay: {
-      const {stateArchive, diffSlots} = await getDiffStateArchive(
-        {slot, skipSlotDiff: false},
-        {db, metrics, logger, hierarchicalLayers: hierarchicalLayers, codec}
-      );
-
-      if (!stateArchive) {
-        regenTimer?.({strategy: HistoricalStateStorageType.BlockReplay});
-        return null;
+    switch (slotType) {
+      case HistoricalStateStorageType.Full: {
+        return measure(metrics?.loadSnapshotStateTime, () => {
+          return db.stateArchive.getBinary(slot);
+        });
       }
 
-      const state = replayBlocks(
-        {
-          toSlot: slot,
-          lastFullSlot: diffSlots[diffSlots.length - 1],
-          lastFullStateBytes: stateArchiveToStateBytes(stateArchive, config),
-        },
-        {config, db, metrics, pubkey2index}
-      );
+      case HistoricalStateStorageType.Snapshot: {
+        return measure(metrics?.loadSnapshotStateTime, async () => {
+          const stateArchive = await db.hierarchicalStateArchiveRepository.get(slot);
+          return stateArchive ? stateArchiveToStateBytes(stateArchive, config) : null;
+        });
+      }
+      case HistoricalStateStorageType.Diff: {
+        const {stateArchive} = await getDiffStateArchive(
+          {slot, skipSlotDiff: false},
+          {db, metrics, logger, hierarchicalLayers: hierarchicalLayers, codec}
+        );
+        return stateArchive ? stateArchiveToStateBytes(stateArchive, config) : null;
+      }
 
-      regenTimer?.({strategy: HistoricalStateStorageType.BlockReplay});
+      case HistoricalStateStorageType.BlockReplay: {
+        const {stateArchive, diffSlots} = await getDiffStateArchive(
+          {slot, skipSlotDiff: false},
+          {db, metrics, logger, hierarchicalLayers: hierarchicalLayers, codec}
+        );
 
-      return state;
+        if (!stateArchive) {
+          return null;
+        }
+
+        const state = replayBlocks(
+          {
+            toSlot: slot,
+            lastFullSlot: diffSlots[diffSlots.length - 1],
+            lastFullStateBytes: stateArchiveToStateBytes(stateArchive, config),
+          },
+          {config, db, metrics, pubkey2index}
+        );
+
+        return state;
+      }
     }
-  }
+  });
 }

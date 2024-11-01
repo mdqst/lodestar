@@ -71,3 +71,39 @@ export interface MetricsRegisterCustom extends MetricsRegisterExtra {
   avgMinMax<Labels extends LabelsGeneric = NoLabels>(config: AvgMinMaxConfig<Labels>): AvgMinMax<Labels>;
   static<Labels extends LabelsGeneric = NoLabels>(config: StaticConfig<Labels>): void;
 }
+
+// biome-ignore lint/suspicious/noExplicitAny: To detect return type for any function need to use `any` type here
+type Callback = (...args: any[]) => any | Promise<any>;
+type LabelsForHistogram<H> = H extends Histogram<infer L> ? L : LabelsGeneric;
+
+export function measure<CB extends Callback>(histogram: Histogram<NoLabels> | undefined, action: CB): ReturnType<CB>;
+export function measure<L extends LabelsGeneric, CB extends Callback>(
+  histogram: Histogram<L> | undefined,
+  label: LabelsForHistogram<Histogram<L>>,
+  action: CB
+): ReturnType<CB>;
+export function measure<L extends LabelsGeneric, CB extends Callback>(
+  histogram: Histogram<L> | undefined,
+  labelOrCallback: LabelsForHistogram<Histogram<L>> | CB,
+  callback?: CB
+): ReturnType<CB> {
+  const action = callback ?? (labelOrCallback as CB);
+  const label = callback
+    ? (labelOrCallback as LabelsForHistogram<Histogram<L>>)
+    : ({} as LabelsForHistogram<Histogram<L>>);
+
+  if (!histogram) return action();
+
+  const timer = histogram.startTimer();
+  const result = action();
+
+  if (result instanceof Promise) {
+    return result.then(() => {
+      timer(label);
+      return result;
+    }) as ReturnType<CB>;
+  }
+
+  timer(label);
+  return result;
+}

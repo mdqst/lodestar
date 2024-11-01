@@ -11,6 +11,7 @@ import {
 import {Slot} from "@lodestar/types";
 import {IBeaconDb} from "../../../db/index.js";
 import {HistoricalStateRegenMetrics, RegenErrorType} from "../types.js";
+import {measure} from "@lodestar/utils";
 
 /**
  * Populate a PubkeyIndexMap with any new entries based on a BeaconState
@@ -50,57 +51,51 @@ export async function replayBlocks(
     throw new Error(`Invalid full state slot to regen historical sate. expected=${toSlot - 1} actual=${lastFullSlot}`);
   }
 
-  const transitionTimer = metrics?.stateTransitionTime.startTimer();
+  return measure(metrics?.stateTransitionTime, async () => {
+    let state = config.getForkTypes(toSlot).BeaconState.deserializeToViewDU(lastFullStateBytes);
+    syncPubkeyCache(state, pubkey2index);
+    state = createCachedBeaconState(
+      state,
+      {
+        config,
+        pubkey2index,
+        index2pubkey: [],
+      },
+      {
+        skipSyncPubkeys: true,
+      }
+    );
 
-  let state = config.getForkTypes(toSlot).BeaconState.deserializeToViewDU(lastFullStateBytes);
-  syncPubkeyCache(state, pubkey2index);
-  state = createCachedBeaconState(
-    state,
-    {
-      config,
-      pubkey2index,
-      index2pubkey: [],
-    },
-    {
-      skipSyncPubkeys: true,
+    let blockCount = 0;
+    for await (const block of db.blockArchive.valuesStream({gt: lastFullSlot, lte: toSlot})) {
+      try {
+        state = stateTransition(
+          state as CachedBeaconStateAllForks,
+          block,
+          {
+            verifyProposer: false,
+            verifySignatures: false,
+            verifyStateRoot: false,
+            executionPayloadStatus: ExecutionPayloadStatus.valid,
+            dataAvailableStatus: DataAvailableStatus.available,
+          },
+          metrics
+        );
+      } catch (e) {
+        metrics?.regenErrorCount.inc({reason: RegenErrorType.blockProcessing});
+        throw e;
+      }
+      blockCount++;
+      if (Buffer.compare(state.hashTreeRoot(), block.message.stateRoot) !== 0) {
+        metrics?.regenErrorCount.inc({reason: RegenErrorType.invalidStateRoot});
+      }
     }
-  );
+    metrics?.stateTransitionBlocks.observe(blockCount);
 
-  let blockCount = 0;
-
-  for await (const block of db.blockArchive.valuesStream({gt: lastFullSlot, lte: toSlot})) {
-    try {
-      state = stateTransition(
-        state as CachedBeaconStateAllForks,
-        block,
-        {
-          verifyProposer: false,
-          verifySignatures: false,
-          verifyStateRoot: false,
-          executionPayloadStatus: ExecutionPayloadStatus.valid,
-          dataAvailableStatus: DataAvailableStatus.available,
-        },
-        metrics
-      );
-    } catch (e) {
-      metrics?.regenErrorCount.inc({reason: RegenErrorType.blockProcessing});
-      throw e;
+    if (state.slot !== toSlot) {
+      throw Error(`Failed to generate historical state for slot ${toSlot}`);
     }
-    blockCount++;
-    if (Buffer.compare(state.hashTreeRoot(), block.message.stateRoot) !== 0) {
-      metrics?.regenErrorCount.inc({reason: RegenErrorType.invalidStateRoot});
-    }
-  }
-  metrics?.stateTransitionBlocks.observe(blockCount);
-  transitionTimer?.();
 
-  if (state.slot !== toSlot) {
-    throw Error(`Failed to generate historical state for slot ${toSlot}`);
-  }
-
-  const serializeTimer = metrics?.stateSerializationTime.startTimer();
-  const stateBytes = state.serialize();
-  serializeTimer?.();
-
-  return stateBytes;
+    return measure(metrics?.stateSerializationTime, () => state.serialize());
+  });
 }
