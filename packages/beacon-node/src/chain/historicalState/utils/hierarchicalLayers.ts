@@ -93,10 +93,11 @@ export class HierarchicalLayers {
         path.push(newSlot);
       }
     }
+
     const diffSlots = [...new Set(path)];
     const snapshotSlot = diffSlots.shift();
 
-    if (!snapshotSlot) {
+    if (snapshotSlot == null) {
       throw new Error(`Can not find snapshot layer for slot=${slot}`);
     }
 
