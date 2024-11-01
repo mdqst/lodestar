@@ -15,6 +15,7 @@ import {
   GraffitiData,
   GasLimitData,
   BuilderBoostFactorData,
+  ProposerConfigResponse,
 } from "@lodestar/api/keymanager";
 import {KeymanagerApiMethods as Api} from "@lodestar/api/keymanager/server";
 import {Interchange, SignerType, Validator} from "@lodestar/validator";
@@ -364,6 +365,23 @@ export class KeymanagerApi implements Api {
     return {status: 204};
   }
 
+  async getProposerConfig({pubkey}: {pubkey: PubkeyHex}): ReturnType<Api["getProposerConfig"]> {
+    const config = this.validator.validatorStore.getProposerConfig(pubkey);
+
+    const data: ProposerConfigResponse = {
+      ...config,
+      builder: config?.builder
+        ? {
+            ...config.builder,
+            // Default JSON serialization can't handle BigInt
+            boostFactor: config.builder.boostFactor ? config.builder.boostFactor.toString() : undefined,
+          }
+        : undefined,
+    };
+
+    return {data};
+  }
+
   async signVoluntaryExit({pubkey, epoch}: {pubkey: PubkeyHex; epoch?: Epoch}): ReturnType<Api["signVoluntaryExit"]> {
     if (!isValidatePubkeyHex(pubkey)) {
       throw new ApiError(400, `Invalid pubkey ${pubkey}`);
@@ -378,7 +396,6 @@ export class KeymanagerApi implements Api {
 function ensureJSON<T>(strOrJson: string | T): T {
   if (typeof strOrJson === "string") {
     return JSON.parse(strOrJson) as T;
-  } else {
-    return strOrJson;
   }
+  return strOrJson;
 }

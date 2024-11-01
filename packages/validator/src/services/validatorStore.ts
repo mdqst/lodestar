@@ -247,7 +247,7 @@ export class ValidatorStore {
       throw Error(`Validator pubkey ${pubkeyHex} not known`);
     }
     // This should directly modify data in the map
-    delete validatorData["feeRecipient"];
+    delete validatorData.feeRecipient;
   }
 
   getGraffiti(pubkeyHex: PubkeyHex): string | undefined {
@@ -267,14 +267,14 @@ export class ValidatorStore {
     if (validatorData === undefined) {
       throw Error(`Validator pubkey ${pubkeyHex} not known`);
     }
-    delete validatorData["graffiti"];
+    delete validatorData.graffiti;
   }
 
   getBuilderSelectionParams(pubkeyHex: PubkeyHex): {selection: routes.validator.BuilderSelection; boostFactor: bigint} {
     const selection =
-      (this.validators.get(pubkeyHex)?.builder || {}).selection ?? this.defaultProposerConfig.builder.selection;
+      this.validators.get(pubkeyHex)?.builder?.selection ?? this.defaultProposerConfig.builder.selection;
 
-    let boostFactor;
+    let boostFactor: bigint;
     switch (selection) {
       case routes.validator.BuilderSelection.Default:
         // Default value slightly favors local block to improve censorship resistance of Ethereum
@@ -284,7 +284,7 @@ export class ValidatorStore {
 
       case routes.validator.BuilderSelection.MaxProfit:
         boostFactor =
-          (this.validators.get(pubkeyHex)?.builder || {}).boostFactor ?? this.defaultProposerConfig.builder.boostFactor;
+          this.validators.get(pubkeyHex)?.builder?.boostFactor ?? this.defaultProposerConfig.builder.boostFactor;
         break;
 
       case routes.validator.BuilderSelection.BuilderAlways:
@@ -377,7 +377,9 @@ export class ValidatorStore {
       graffiti !== undefined ||
       strictFeeRecipientCheck !== undefined ||
       feeRecipient !== undefined ||
-      builder?.gasLimit !== undefined
+      builder?.gasLimit !== undefined ||
+      builder?.selection !== undefined ||
+      builder?.boostFactor !== undefined
     ) {
       proposerConfig = {graffiti, strictFeeRecipientCheck, feeRecipient, builder};
     }
@@ -386,7 +388,7 @@ export class ValidatorStore {
 
   async addSigner(signer: Signer, valProposerConfig?: ValidatorProposerConfig): Promise<void> {
     const pubkey = getSignerPubkeyHex(signer);
-    const proposerConfig = (valProposerConfig?.proposerConfig ?? {})[pubkey];
+    const proposerConfig = valProposerConfig?.proposerConfig?.[pubkey];
     const builderBoostFactor = proposerConfig?.builder?.boostFactor;
     if (builderBoostFactor !== undefined && builderBoostFactor > MAX_BUILDER_BOOST_FACTOR) {
       throw Error(`Invalid builderBoostFactor=${builderBoostFactor} > MAX_BUILDER_BOOST_FACTOR for pubkey=${pubkey}`);
@@ -538,13 +540,13 @@ export class ValidatorStore {
         data: attestationData,
         signature: await this.getSignature(duty.pubkey, signingRoot, signingSlot, signableMessage),
       };
-    } else {
-      return {
-        aggregationBits: BitArray.fromSingleBit(duty.committeeLength, duty.validatorCommitteeIndex),
-        data: attestationData,
-        signature: await this.getSignature(duty.pubkey, signingRoot, signingSlot, signableMessage),
-      } as phase0.Attestation;
     }
+
+    return {
+      aggregationBits: BitArray.fromSingleBit(duty.committeeLength, duty.validatorCommitteeIndex),
+      data: attestationData,
+      signature: await this.getSignature(duty.pubkey, signingRoot, signingSlot, signableMessage),
+    } as phase0.Attestation;
   }
 
   async signAggregateAndProof(
@@ -731,15 +733,14 @@ export class ValidatorStore {
     const builderData = validatorData?.builderData;
     if (builderData?.regFullKey === regFullKey) {
       return builderData.validatorRegistration;
-    } else {
-      const validatorRegistration = await this.signValidatorRegistration(pubkeyMaybeHex, regAttributes, slot);
-      // If pubkeyHex was actually registered, then update the regData
-      if (validatorData !== undefined) {
-        validatorData.builderData = {validatorRegistration, regFullKey};
-        this.validators.set(pubkeyHex, validatorData);
-      }
-      return validatorRegistration;
     }
+    const validatorRegistration = await this.signValidatorRegistration(pubkeyMaybeHex, regAttributes, slot);
+    // If pubkeyHex was actually registered, then update the regData
+    if (validatorData !== undefined) {
+      validatorData.builderData = {validatorRegistration, regFullKey};
+      this.validators.set(pubkeyHex, validatorData);
+    }
+    return validatorRegistration;
   }
 
   private async getSignature(
@@ -803,7 +804,7 @@ export class ValidatorStore {
     }
 
     const isPostElectra = this.config.getForkSeq(data.slot) >= ForkSeq.electra;
-    if (!isPostElectra && duty.committeeIndex != data.index) {
+    if (!isPostElectra && duty.committeeIndex !== data.index) {
       throw Error(
         `Inconsistent duties during signing: duty.committeeIndex ${duty.committeeIndex} != att.committeeIndex ${data.index}`
       );

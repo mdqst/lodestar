@@ -193,7 +193,6 @@ export type TypeJson<T> = {
 };
 
 export function getTypeByEvent(config: ChainForkConfig): {[K in EventType]: TypeJson<EventData[K]>} {
-  // eslint-disable-next-line @typescript-eslint/naming-convention
   const WithVersion = <T>(getType: (fork: ForkName) => TypeJson<T>): TypeJson<{data: T; version: ForkName}> => {
     return {
       toJson: ({data, version}) => ({
@@ -295,7 +294,6 @@ export function getTypeByEvent(config: ChainForkConfig): {[K in EventType]: Type
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function getEventSerdes(config: ChainForkConfig) {
   const typeByEvent = getTypeByEvent(config);
 

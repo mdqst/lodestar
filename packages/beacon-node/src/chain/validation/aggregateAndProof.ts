@@ -6,7 +6,7 @@ import {
   createAggregateSignatureSetFromComponents,
 } from "@lodestar/state-transition";
 import {toRootHex} from "@lodestar/utils";
-import {IBeaconChain} from "..";
+import {IBeaconChain} from "../index.js";
 import {AttestationError, AttestationErrorCode, GossipAction} from "../errors/index.js";
 import {RegenCaller} from "../regen/index.js";
 import {getSelectionProofSignatureSet, getAggregateAndProofSignatureSet} from "./signatureSets/index.js";
@@ -71,7 +71,7 @@ async function validateAggregateAndProof(
   const attData = aggregate.data;
   const attSlot = attData.slot;
 
-  let attIndex;
+  let attIndex: number | null;
   if (ForkSeq[fork] >= ForkSeq.electra) {
     attIndex = (aggregate as electra.Attestation).committeeBits.getSingleTrueBit();
     // [REJECT] len(committee_indices) == 1, where committee_indices = get_committee_indices(aggregate)

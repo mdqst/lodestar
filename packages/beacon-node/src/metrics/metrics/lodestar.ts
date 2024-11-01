@@ -25,7 +25,6 @@ export type LodestarMetrics = ReturnType<typeof createLodestarMetrics>;
 /**
  * Extra Lodestar custom metrics
  */
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function createLodestarMetrics(
   register: RegistryMetricCreator,
   metadata?: LodestarMetadata,
@@ -497,11 +496,6 @@ export function createLodestarMetrics(
       batchableSigSets: register.gauge({
         name: "lodestar_bls_thread_pool_batchable_sig_sets_total",
         help: "Count of total batchable signature sets",
-      }),
-      aggregateWithRandomnessMainThreadDuration: register.histogram({
-        name: "lodestar_bls_thread_pool_aggregate_with_randomness_main_thread_time_seconds",
-        help: "Total time performing aggregateWithRandomness on main thread",
-        buckets: [0.001, 0.005, 0.01, 0.1],
       }),
       pubkeysAggregationMainThreadDuration: register.histogram({
         name: "lodestar_bls_thread_pool_pubkeys_aggregation_main_thread_time_seconds",
