@@ -665,14 +665,19 @@ function getBatchHandlers(modules: ValidatorFnsModules, options: GossipHandlerOp
         }
 
         if (isForkPostElectra(fork)) {
-          chain.emitter.emit(routes.events.EventType.singleAttestation, attestation as SingleAttestation<ForkPostElectra>);
+          chain.emitter.emit(
+            routes.events.EventType.singleAttestation,
+            attestation as SingleAttestation<ForkPostElectra>
+          );
         } else {
           chain.emitter.emit(routes.events.EventType.attestation, attestation as SingleAttestation<ForkPreElectra>);
-          chain.emitter.emit(routes.events.EventType.singleAttestation, 
+          chain.emitter.emit(
+            routes.events.EventType.singleAttestation,
             toElectraSingleAttestation(
               attestation as SingleAttestation<ForkPreElectra>,
               indexedAttestation.attestingIndices[0]
-            ));
+            )
+          );
         }
       }
 

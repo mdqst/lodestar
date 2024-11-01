@@ -5,6 +5,7 @@ import {
   FIELD_ELEMENTS_PER_BLOB,
   ForkName,
   ForkSeq,
+  isForkPostElectra,
   MAX_COMMITTEES_PER_SLOT,
 } from "@lodestar/params";
 
@@ -45,6 +46,7 @@ const VARIABLE_FIELD_OFFSET = 4;
 const ATTESTATION_BEACON_BLOCK_ROOT_OFFSET = VARIABLE_FIELD_OFFSET + 8 + 8;
 const ROOT_SIZE = 32;
 const SLOT_SIZE = 8;
+const COMMITTEE_INDEX_SIZE = 8;
 const ATTESTATION_DATA_SIZE = 128;
 // MAX_COMMITTEES_PER_SLOT is in bit, need to convert to byte
 const COMMITTEE_BITS_SIZE = Math.max(Math.ceil(MAX_COMMITTEES_PER_SLOT / 8), 1);
@@ -164,22 +166,6 @@ export function getSignatureFromAttestationSerialized(data: Uint8Array): BLSSign
 }
 
 /**
- * Extract committee bits from Electra attestation serialized bytes.
- * Return null if data is not long enough to extract committee bits.
- * TODO: remove
- */
-export function getCommitteeBitsFromAttestationSerialized(data: Uint8Array): CommitteeBitsBase64 | null {
-  const committeeBitsStartIndex = VARIABLE_FIELD_OFFSET + ATTESTATION_DATA_SIZE + SIGNATURE_SIZE;
-
-  if (data.length < committeeBitsStartIndex + COMMITTEE_BITS_SIZE) {
-    return null;
-  }
-
-  committeeBitsDataBuf.set(data.subarray(committeeBitsStartIndex, committeeBitsStartIndex + COMMITTEE_BITS_SIZE));
-  return committeeBitsDataBuf.toString("base64");
-}
-
-/**
  * Extract slot from SingleAttestation serialized bytes.
  * Return null if data is not long enough to extract slot.
  */
@@ -196,12 +182,23 @@ export function getSlotFromSingleAttestationSerialized(data: Uint8Array): Slot |
  * Return null if data is not long enough to extract slot.
  * TODO Electra: Rename getSlotFromOffset to reflect generic usage
  */
-export function getCommitteeIndexFromSingleAttestationSerialized(data: Uint8Array): CommitteeIndex | null {
-  if (data.length !== SINGLE_ATTESTATION_SIZE) {
-    return null;
-  }
+export function getCommitteeIndexFromSingleAttestationSerialized(
+  fork: ForkName,
+  data: Uint8Array
+): CommitteeIndex | null {
+  if (isForkPostElectra(fork)) {
+    if (data.length !== SINGLE_ATTESTATION_SIZE) {
+      return null;
+    }
 
-  return getSlotFromOffset(data, SINGLE_ATTESTATION_COMMITTEE_INDEX_OFFSET);
+    return getSlotFromOffset(data, SINGLE_ATTESTATION_COMMITTEE_INDEX_OFFSET);
+  } else {
+    if (data.length < VARIABLE_FIELD_OFFSET + SLOT_SIZE + COMMITTEE_INDEX_SIZE) {
+      return null;
+    }
+
+    return getSlotFromOffset(data, VARIABLE_FIELD_OFFSET + SLOT_SIZE);
+  }
 }
 
 /**

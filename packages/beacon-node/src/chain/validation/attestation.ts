@@ -48,7 +48,11 @@ import {
   getBeaconAttestationGossipIndex,
   getCommitteeIndexFromSingleAttestationSerialized,
 } from "../../util/sszBytes.js";
-import {AttestationDataCacheEntry, SeenAttDataKey} from "../seenCache/seenAttestationData.js";
+import {
+  AttestationDataCacheEntry,
+  PRE_ELECTRA_SINGLE_ATTESTATION_COMMITTEE_INDEX,
+  SeenAttDataKey,
+} from "../seenCache/seenAttestationData.js";
 import {sszDeserializeSingleAttestation} from "../../network/gossip/topic.js";
 import {Result, wrapError} from "../../util/wrapError.js";
 import {IBeaconChain} from "../interface.js";
@@ -261,7 +265,7 @@ async function validateAttestationNoSignatureCheck(
     attDataKey = getSeenAttDataKeyFromGossipAttestation(fork, attestationOrBytes);
     const committeeIndexForLookup = isForkPostElectra(fork)
       ? getCommitteeIndexFromAttestationOrBytes(fork, attestationOrBytes) ?? 0
-      : 0;
+      : PRE_ELECTRA_SINGLE_ATTESTATION_COMMITTEE_INDEX;
     const cachedAttData =
       attDataKey !== null ? chain.seenAttestationDatas.get(attSlot, committeeIndexForLookup, attDataKey) : null;
     if (cachedAttData === null) {
@@ -853,13 +857,13 @@ export function getCommitteeIndexFromAttestationOrBytes(
 
   if (isForkPostElectra(fork)) {
     if (isGossipAttestation) {
-      return getCommitteeIndexFromSingleAttestationSerialized(attestationOrBytes.serializedData);
+      return getCommitteeIndexFromSingleAttestationSerialized(ForkName.electra, attestationOrBytes.serializedData);
     } else {
       return (attestationOrBytes.attestation as SingleAttestation<ForkPostElectra>).committeeIndex;
     }
   } else {
     if (isGossipAttestation) {
-      return null; // TODO Electra
+      return getCommitteeIndexFromSingleAttestationSerialized(ForkName.phase0, attestationOrBytes.serializedData);
     } else {
       return (attestationOrBytes.attestation as SingleAttestation<ForkPreElectra>).data.index;
     }
