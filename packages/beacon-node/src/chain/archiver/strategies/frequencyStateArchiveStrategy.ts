@@ -24,11 +24,8 @@ export const PERSIST_TEMP_STATE_EVERY_EPOCHS = 32;
  */
 export class FrequencyStateArchiveStrategy implements StateArchiveStrategy {
   constructor(
-    private readonly regen: IStateRegenerator,
-    private readonly db: IBeaconDb,
-    private readonly logger: Logger,
-    private readonly opts: StatesArchiverOpts,
-    private readonly bufferPool?: BufferPool | null
+    protected modules: {regen: IStateRegenerator; db: IBeaconDb; logger: Logger; bufferPool?: BufferPool | null},
+    protected readonly opts: StatesArchiverOpts
   ) {}
 
   async onFinalizedCheckpoint(finalized: CheckpointWithHex, metrics?: Metrics | null): Promise<void> {
@@ -50,7 +47,7 @@ export class FrequencyStateArchiveStrategy implements StateArchiveStrategy {
    * ```
    */
   async maybeArchiveState(finalized: CheckpointWithHex, metrics?: Metrics | null): Promise<void> {
-    const lastStoredSlot = await this.db.stateArchive.lastKey();
+    const lastStoredSlot = await this.modules.db.stateArchive.lastKey();
     const lastStoredEpoch = computeEpochAtSlot(lastStoredSlot ?? 0);
     const {archiveStateEpochFrequency} = this.opts;
 
@@ -63,18 +60,18 @@ export class FrequencyStateArchiveStrategy implements StateArchiveStrategy {
         (Math.floor(finalized.epoch / archiveStateEpochFrequency) - 1) * archiveStateEpochFrequency
       );
 
-      const storedStateSlots = await this.db.stateArchive.keys({
+      const storedStateSlots = await this.modules.db.stateArchive.keys({
         lt: computeStartSlotAtEpoch(finalized.epoch),
         gte: computeStartSlotAtEpoch(minEpoch),
       });
 
       const statesSlotsToDelete = computeStateSlotsToDelete(storedStateSlots, archiveStateEpochFrequency);
       if (statesSlotsToDelete.length > 0) {
-        await this.db.stateArchive.batchDelete(statesSlotsToDelete);
+        await this.modules.db.stateArchive.batchDelete(statesSlotsToDelete);
       }
 
       // More logs to investigate the rss spike issue https://github.com/ChainSafe/lodestar/issues/5591
-      this.logger.verbose("Archived state completed", {
+      this.modules.logger.verbose("Archived state completed", {
         finalizedEpoch: finalized.epoch,
         minEpoch,
         storedStateSlots: storedStateSlots.join(","),
@@ -89,15 +86,15 @@ export class FrequencyStateArchiveStrategy implements StateArchiveStrategy {
    */
   private async archiveState(finalized: CheckpointWithHex, metrics?: Metrics | null): Promise<void> {
     // starting from Mar 2024, the finalized state could be from disk or in memory
-    const finalizedStateOrBytes = await this.regen.getCheckpointStateOrBytes(finalized);
+    const finalizedStateOrBytes = await this.modules.regen.getCheckpointStateOrBytes(finalized);
     const {rootHex} = finalized;
     if (!finalizedStateOrBytes) {
       throw Error(`No state in cache for finalized checkpoint state epoch #${finalized.epoch} root ${rootHex}`);
     }
     if (finalizedStateOrBytes instanceof Uint8Array) {
       const slot = getStateSlotFromBytes(finalizedStateOrBytes);
-      await this.db.stateArchive.putBinary(slot, finalizedStateOrBytes);
-      this.logger.verbose("Archived finalized state bytes", {epoch: finalized.epoch, slot, root: rootHex});
+      await this.modules.db.stateArchive.putBinary(slot, finalizedStateOrBytes);
+      this.modules.logger.verbose("Archived finalized state bytes", {epoch: finalized.epoch, slot, root: rootHex});
     } else {
       // serialize state using BufferPool if provided
       const timer = metrics?.stateSerializeDuration.startTimer({source: AllocSource.ARCHIVE_STATE});
@@ -106,12 +103,12 @@ export class FrequencyStateArchiveStrategy implements StateArchiveStrategy {
         AllocSource.ARCHIVE_STATE,
         (stateBytes) => {
           timer?.();
-          return this.db.stateArchive.putBinary(finalizedStateOrBytes.slot, stateBytes);
+          return this.modules.db.stateArchive.putBinary(finalizedStateOrBytes.slot, stateBytes);
         },
-        this.bufferPool
+        this.modules.bufferPool
       );
       // don't delete states before the finalized state, auto-prune will take care of it
-      this.logger.verbose("Archived finalized state", {
+      this.modules.logger.verbose("Archived finalized state", {
         epoch: finalized.epoch,
         slot: finalizedStateOrBytes.slot,
         root: rootHex,

@@ -34,25 +34,21 @@ export class Archiver {
     opts: ArchiverOpts,
     private readonly metrics?: Metrics | null
   ) {
+    const {regen, bufferPool, historicalStateRegen} = chain;
     switch (opts.stateArchiveMode) {
       case StateArchiveMode.Frequency:
         this.statesArchiverStrategy = new FrequencyStateArchiveStrategy(
-          chain.regen,
-          db,
-          logger,
-          opts,
-          chain.bufferPool
+          {
+            regen,
+            db,
+            logger,
+            bufferPool,
+          },
+          opts
         );
         break;
       case StateArchiveMode.Differential:
-        this.statesArchiverStrategy = new DifferentialStateArchiveStrategy(
-          chain.historicalStateRegen,
-          chain.regen,
-          db,
-          logger,
-          opts,
-          chain.bufferPool
-        );
+        this.statesArchiverStrategy = new DifferentialStateArchiveStrategy({historicalStateRegen, regen, logger});
         break;
       default:
         throw new Error(`State archive strategy "${opts.stateArchiveMode}" currently not supported.`);
