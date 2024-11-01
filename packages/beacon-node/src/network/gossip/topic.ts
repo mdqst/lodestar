@@ -146,7 +146,7 @@ export function sszDeserializeSingleAttestation(fork: ForkName, serializedData: 
   try {
     if (isForkPostElectra(fork)) {
       return sszTypesFor(fork).SingleAttestation.deserialize(serializedData);
-    } 
+    }
     return sszTypesFor(fork).Attestation.deserialize(serializedData) as SingleAttestation;
   } catch (e) {
     throw new GossipActionError(GossipAction.REJECT, {code: GossipErrorCode.INVALID_SERIALIZED_BYTES_ERROR_CODE});

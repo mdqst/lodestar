@@ -24,6 +24,10 @@ export type AttestationDataCacheEntry = {
   // for example in a mainnet node subscribing to all subnets, attestations are processed up to 20k per slot
   attestationData: phase0.AttestationData;
   subnet: number;
+  // aggregationBits only populates post-electra. Pre-electra can use get it directly from attestationOrBytes
+  aggregationBits: BitArray | null;
+  // committeeBits only populates post-electra. Pre-electra does not require it
+  committeeBits: BitArray | null;
 };
 
 export enum RejectReason {

@@ -11,7 +11,6 @@ import {
   phase0,
   SignedBeaconBlock,
   Slot,
-  Attestation,
   SignedAggregateAndProof,
   SingleAttestation,
 } from "@lodestar/types";
