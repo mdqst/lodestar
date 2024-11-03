@@ -1,13 +1,13 @@
 import {BitArray, deserializeUint8ArrayBitListFromBytes} from "@chainsafe/ssz";
-import {BLSSignature, CommitteeIndex, RootHex, Slot} from "@lodestar/types";
 import {
   BYTES_PER_FIELD_ELEMENT,
   FIELD_ELEMENTS_PER_BLOB,
   ForkName,
   ForkSeq,
-  isForkPostElectra,
   MAX_COMMITTEES_PER_SLOT,
+  isForkPostElectra,
 } from "@lodestar/params";
+import {BLSSignature, CommitteeIndex, RootHex, Slot} from "@lodestar/types";
 
 export type BlockRootHex = RootHex;
 // pre-electra, AttestationData is used to cache attestations
@@ -192,13 +192,13 @@ export function getCommitteeIndexFromSingleAttestationSerialized(
     }
 
     return getSlotFromOffset(data, SINGLE_ATTESTATION_COMMITTEE_INDEX_OFFSET);
-  } else {
-    if (data.length < VARIABLE_FIELD_OFFSET + SLOT_SIZE + COMMITTEE_INDEX_SIZE) {
-      return null;
-    }
-
-    return getSlotFromOffset(data, VARIABLE_FIELD_OFFSET + SLOT_SIZE);
   }
+
+  if (data.length < VARIABLE_FIELD_OFFSET + SLOT_SIZE + COMMITTEE_INDEX_SIZE) {
+    return null;
+  }
+
+  return getSlotFromOffset(data, VARIABLE_FIELD_OFFSET + SLOT_SIZE);
 }
 
 /**

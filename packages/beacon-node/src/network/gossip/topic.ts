@@ -1,18 +1,18 @@
-import {ssz, Attestation, sszTypesFor, SingleAttestation} from "@lodestar/types";
 import {ForkDigestContext} from "@lodestar/config";
 import {
   ATTESTATION_SUBNET_COUNT,
   ForkName,
   ForkSeq,
+  MAX_BLOBS_PER_BLOCK,
   SYNC_COMMITTEE_SUBNET_COUNT,
   isForkLightClient,
-  MAX_BLOBS_PER_BLOCK,
   isForkPostElectra,
 } from "@lodestar/params";
+import {Attestation, SingleAttestation, ssz, sszTypesFor} from "@lodestar/types";
 
 import {GossipAction, GossipActionError, GossipErrorCode} from "../../chain/errors/gossipValidation.js";
-import {GossipEncoding, GossipTopic, GossipType, GossipTopicTypeMap, SSZTypeOfGossipTopic} from "./interface.js";
 import {DEFAULT_ENCODING} from "./constants.js";
+import {GossipEncoding, GossipTopic, GossipTopicTypeMap, GossipType, SSZTypeOfGossipTopic} from "./interface.js";
 
 export interface IGossipTopicCache {
   getTopic(topicStr: string): GossipTopic;
@@ -147,7 +147,7 @@ export function sszDeserializeSingleAttestation(fork: ForkName, serializedData: 
       return sszTypesFor(fork).SingleAttestation.deserialize(serializedData);
     }
     return sszTypesFor(fork).Attestation.deserialize(serializedData) as SingleAttestation;
-  } catch (e) {
+  } catch (_e) {
     throw new GossipActionError(GossipAction.REJECT, {code: GossipErrorCode.INVALID_SERIALIZED_BYTES_ERROR_CODE});
   }
 }

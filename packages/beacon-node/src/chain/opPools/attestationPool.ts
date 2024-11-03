@@ -1,9 +1,9 @@
-import {BitArray} from "@chainsafe/ssz";
 import {Signature, aggregateSignatures} from "@chainsafe/blst";
-import {Slot, RootHex, Attestation, SingleAttestation, isElectraSingleAttestation} from "@lodestar/types";
-import {MapDef, assert} from "@lodestar/utils";
-import {isForkPostElectra} from "@lodestar/params";
+import {BitArray} from "@chainsafe/ssz";
 import {ChainForkConfig} from "@lodestar/config";
+import {isForkPostElectra} from "@lodestar/params";
+import {Attestation, RootHex, SingleAttestation, Slot, isElectraSingleAttestation} from "@lodestar/types";
+import {assert, MapDef} from "@lodestar/utils";
 import {IClock} from "../../util/clock.js";
 import {InsertOutcome, OpPoolError, OpPoolErrorCode} from "./types.js";
 import {isElectraAggregate, pruneBySlot, signatureFromBytesNoCheck} from "./utils.js";
@@ -151,7 +151,7 @@ export class AttestationPool {
     if (aggregate) {
       // Aggregate mutating
       return aggregateAttestationInto(aggregate, attestation, aggregationBits);
-    } 
+    }
     // Create new aggregate
     aggregateByIndex.set(committeeIndex, attestationToAggregate(attestation, aggregationBits, committeeBits));
     return InsertOutcome.NewData;

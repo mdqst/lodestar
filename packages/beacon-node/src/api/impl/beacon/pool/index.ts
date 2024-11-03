@@ -1,6 +1,5 @@
 import {routes} from "@lodestar/api";
 import {ApplicationMethods} from "@lodestar/api/server";
-import {Attestation, Epoch, isElectraAttestation, SingleAttestation, ssz} from "@lodestar/types";
 import {
   ForkName,
   ForkPostElectra,
@@ -8,21 +7,22 @@ import {
   SYNC_COMMITTEE_SUBNET_SIZE,
   isForkPostElectra,
 } from "@lodestar/params";
-import {toElectraSingleAttestation, validateApiAttestation} from "../../../../chain/validation/index.js";
-import {validateApiAttesterSlashing} from "../../../../chain/validation/attesterSlashing.js";
-import {validateApiProposerSlashing} from "../../../../chain/validation/proposerSlashing.js";
-import {validateApiVoluntaryExit} from "../../../../chain/validation/voluntaryExit.js";
-import {validateApiBlsToExecutionChange} from "../../../../chain/validation/blsToExecutionChange.js";
-import {validateApiSyncCommittee} from "../../../../chain/validation/syncCommittee.js";
-import {ApiModules} from "../../types.js";
+import {Attestation, Epoch, SingleAttestation, isElectraAttestation, ssz} from "@lodestar/types";
 import {
   AttestationError,
   AttestationErrorCode,
   GossipAction,
   SyncCommitteeError,
 } from "../../../../chain/errors/index.js";
+import {validateApiAttesterSlashing} from "../../../../chain/validation/attesterSlashing.js";
+import {validateApiBlsToExecutionChange} from "../../../../chain/validation/blsToExecutionChange.js";
+import {toElectraSingleAttestation, validateApiAttestation} from "../../../../chain/validation/index.js";
+import {validateApiProposerSlashing} from "../../../../chain/validation/proposerSlashing.js";
+import {validateApiSyncCommittee} from "../../../../chain/validation/syncCommittee.js";
+import {validateApiVoluntaryExit} from "../../../../chain/validation/voluntaryExit.js";
 import {validateGossipFnRetryUnknownRoot} from "../../../../network/processor/gossipHandlers.js";
 import {ApiError, FailureList, IndexedError} from "../../errors.js";
+import {ApiModules} from "../../types.js";
 
 export function getBeaconPoolApi({
   chain,

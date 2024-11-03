@@ -1,12 +1,12 @@
-import {SlotOptionalRoot, SlotRootHex} from "@lodestar/types";
 import {ForkName} from "@lodestar/params";
+import {SlotOptionalRoot, SlotRootHex} from "@lodestar/types";
 import {
-  getBlockRootFromSignedAggregateAndProofSerialized,
-  getSlotFromSignedAggregateAndProofSerialized,
-  getSlotFromBlobSidecarSerialized,
-  getSlotFromSignedBeaconBlockSerialized,
-  getSlotFromBeaconAttestationSerialized,
   getBlockRootFromBeaconAttestationSerialized,
+  getBlockRootFromSignedAggregateAndProofSerialized,
+  getSlotFromBeaconAttestationSerialized,
+  getSlotFromBlobSidecarSerialized,
+  getSlotFromSignedAggregateAndProofSerialized,
+  getSlotFromSignedBeaconBlockSerialized,
 } from "../../util/sszBytes.js";
 import {GossipType} from "../gossip/index.js";
 import {ExtractSlotRootFns} from "./types.js";

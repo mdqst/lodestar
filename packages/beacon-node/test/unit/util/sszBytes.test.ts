@@ -1,38 +1,38 @@
-import {describe, it, expect} from "vitest";
 import {BitArray} from "@chainsafe/ssz";
+import {ForkName, MAX_COMMITTEES_PER_SLOT} from "@lodestar/params";
 import {
   CommitteeIndex,
-  deneb,
-  electra,
   Epoch,
-  isElectraSingleAttestation,
-  phase0,
   RootHex,
   SingleAttestation,
   Slot,
+  deneb,
+  electra,
+  isElectraSingleAttestation,
+  phase0,
   ssz,
   sszTypesFor,
 } from "@lodestar/types";
 import {fromHex, toHex, toRootHex} from "@lodestar/utils";
-import {ForkName, MAX_COMMITTEES_PER_SLOT} from "@lodestar/params";
+import {describe, expect, it} from "vitest";
 import {
-  getAttDataFromAttestationSerialized,
-  getAttDataFromSignedAggregateAndProofPhase0,
   getAggregationBitsFromAttestationSerialized,
+  getAttDataFromAttestationSerialized,
+  getAttDataFromSignedAggregateAndProofElectra,
+  getAttDataFromSignedAggregateAndProofPhase0,
+  getAttDataFromSingleAttestationSerialized,
   getBlockRootFromAttestationSerialized,
   getBlockRootFromSignedAggregateAndProofSerialized,
-  getSlotFromAttestationSerialized,
-  getSlotFromSignedAggregateAndProofSerialized,
-  getSignatureFromAttestationSerialized,
-  getSlotFromSignedBeaconBlockSerialized,
-  getSlotFromBlobSidecarSerialized,
-  getCommitteeBitsFromSignedAggregateAndProofElectra,
-  getAttDataFromSignedAggregateAndProofElectra,
-  getSlotFromSingleAttestationSerialized,
-  getCommitteeIndexFromSingleAttestationSerialized,
   getBlockRootFromSingleAttestationSerialized,
-  getAttDataFromSingleAttestationSerialized,
+  getCommitteeBitsFromSignedAggregateAndProofElectra,
+  getCommitteeIndexFromSingleAttestationSerialized,
+  getSignatureFromAttestationSerialized,
   getSignatureFromSingleAttestationSerialized,
+  getSlotFromAttestationSerialized,
+  getSlotFromBlobSidecarSerialized,
+  getSlotFromSignedAggregateAndProofSerialized,
+  getSlotFromSignedBeaconBlockSerialized,
+  getSlotFromSingleAttestationSerialized,
 } from "../../../src/util/sszBytes.js";
 
 describe("SinlgeAttestation SSZ serialized picking", () => {

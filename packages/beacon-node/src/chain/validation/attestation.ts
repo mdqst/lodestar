@@ -1,62 +1,63 @@
 import {BitArray} from "@chainsafe/ssz";
-import {
-  phase0,
-  Epoch,
-  Root,
-  Slot,
-  RootHex,
-  ssz,
-  electra,
-  CommitteeIndex,
-  IndexedAttestation,
-  SingleAttestation,
-  ValidatorIndex,
-  isElectraSingleAttestation,
-} from "@lodestar/types";
+import {BeaconConfig} from "@lodestar/config";
 import {ProtoBlock} from "@lodestar/fork-choice";
 import {
   ATTESTATION_SUBNET_COUNT,
-  SLOTS_PER_EPOCH,
-  ForkName,
-  ForkSeq,
   DOMAIN_BEACON_ATTESTER,
-  isForkPostElectra,
+  ForkName,
   ForkPostElectra,
   ForkPreElectra,
+  ForkSeq,
+  SLOTS_PER_EPOCH,
+  isForkPostElectra,
 } from "@lodestar/params";
 import {
-  computeEpochAtSlot,
-  createSingleSignatureSetFromComponents,
-  SingleSignatureSet,
   EpochCacheError,
   EpochCacheErrorCode,
   EpochShuffling,
-  computeStartSlotAtEpoch,
+  SingleSignatureSet,
+  computeEpochAtSlot,
   computeSigningRoot,
+  computeStartSlotAtEpoch,
+  createSingleSignatureSetFromComponents,
 } from "@lodestar/state-transition";
-import {BeaconConfig} from "@lodestar/config";
+import {
+  CommitteeIndex,
+  Epoch,
+  IndexedAttestation,
+  Root,
+  RootHex,
+  SingleAttestation,
+  Slot,
+  ValidatorIndex,
+  electra,
+  isElectraSingleAttestation,
+  phase0,
+  ssz,
+} from "@lodestar/types";
 import {toRootHex} from "@lodestar/utils";
-import {AttestationError, AttestationErrorCode, GossipAction} from "../errors/index.js";
 import {MAXIMUM_GOSSIP_CLOCK_DISPARITY_SEC} from "../../constants/index.js";
-import {RegenCaller} from "../regen/index.js";
+import {sszDeserializeAttestation} from "../../network/gossip/topic.js";
+import {sszDeserializeSingleAttestation} from "../../network/gossip/topic.js";
+import {getShufflingDependentRoot} from "../../util/dependentRoot.js";
 import {
   getAggregationBitsFromAttestationSerialized,
   getAttDataFromSignedAggregateAndProofElectra,
-  getCommitteeBitsFromSignedAggregateAndProofElectra,
   getAttDataFromSignedAggregateAndProofPhase0,
-  getSignatureFromAttestationSerialized,
   getBeaconAttestationGossipIndex,
+  getCommitteeBitsFromSignedAggregateAndProofElectra,
   getCommitteeIndexFromSingleAttestationSerialized,
+  getSignatureFromAttestationSerialized,
 } from "../../util/sszBytes.js";
+import {Result, wrapError} from "../../util/wrapError.js";
+import {AttestationError, AttestationErrorCode, GossipAction} from "../errors/index.js";
+import {IBeaconChain} from "../interface.js";
+import {RegenCaller} from "../regen/index.js";
 import {
   AttestationDataCacheEntry,
   PRE_ELECTRA_SINGLE_ATTESTATION_COMMITTEE_INDEX,
   SeenAttDataKey,
 } from "../seenCache/seenAttestationData.js";
-import {sszDeserializeSingleAttestation} from "../../network/gossip/topic.js";
-import {Result, wrapError} from "../../util/wrapError.js";
-import {IBeaconChain} from "../interface.js";
-import {getShufflingDependentRoot} from "../../util/dependentRoot.js";
 
 export type BatchResult = {
   results: Result<AttestationValidationResult>[];
@@ -263,7 +264,7 @@ async function validateAttestationNoSignatureCheck(
     const attSlot = attestationOrBytes.attSlot;
     attDataKey = getSeenAttDataKeyFromGossipAttestation(fork, attestationOrBytes);
     const committeeIndexForLookup = isForkPostElectra(fork)
-      ? getCommitteeIndexFromAttestationOrBytes(fork, attestationOrBytes) ?? 0
+      ? (getCommitteeIndexFromAttestationOrBytes(fork, attestationOrBytes) ?? 0)
       : PRE_ELECTRA_SINGLE_ATTESTATION_COMMITTEE_INDEX;
     const cachedAttData =
       attDataKey !== null ? chain.seenAttestationDatas.get(attSlot, committeeIndexForLookup, attDataKey) : null;
@@ -857,16 +858,13 @@ export function getCommitteeIndexFromAttestationOrBytes(
   if (isForkPostElectra(fork)) {
     if (isGossipAttestation) {
       return getCommitteeIndexFromSingleAttestationSerialized(ForkName.electra, attestationOrBytes.serializedData);
-    } else {
-      return (attestationOrBytes.attestation as SingleAttestation<ForkPostElectra>).committeeIndex;
     }
-  } else {
-    if (isGossipAttestation) {
-      return getCommitteeIndexFromSingleAttestationSerialized(ForkName.phase0, attestationOrBytes.serializedData);
-    } else {
-      return (attestationOrBytes.attestation as SingleAttestation<ForkPreElectra>).data.index;
-    }
+    return (attestationOrBytes.attestation as SingleAttestation<ForkPostElectra>).committeeIndex;
   }
+  if (isGossipAttestation) {
+    return getCommitteeIndexFromSingleAttestationSerialized(ForkName.phase0, attestationOrBytes.serializedData);
+  }
+  return (attestationOrBytes.attestation as SingleAttestation<ForkPreElectra>).data.index;
 }
 
 /**
