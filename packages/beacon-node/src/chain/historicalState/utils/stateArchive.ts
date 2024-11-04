@@ -71,7 +71,7 @@ export function applyDiffArchive(base: StateArchive, updated: StateArchive, code
   }
 
   const partialState = codec.apply(base.partialState, updated.partialState);
-  const balances = codec.compute(base.balances, updated.balances);
+  const balances = codec.apply(base.balances, updated.balances);
 
   return {
     snapshot: true,

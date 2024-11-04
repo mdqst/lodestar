@@ -4,9 +4,9 @@ import {computeEpochAtSlot} from "@lodestar/state-transition";
 import {formatBytes, measure} from "@lodestar/utils";
 import {HistoricalStateRegenMetrics, IStateDiffCodec, RegenErrorType} from "../types.js";
 import {IBeaconDb} from "../../../db/interface.js";
-import {HierarchicalLayers} from "./hierarchicalLayers.js";
-import {getSnapshotStateArchiveWithFallback} from "./snapshot.js";
-import {applyDiffArchive, getLastStoredStateArchive} from "./stateArchive.js";
+import {HierarchicalLayers, Layers} from "./hierarchicalLayers.js";
+import {getSnapshotStateArchive, searchSnapshotStateArchive} from "./snapshot.js";
+import {applyDiffArchive} from "./stateArchive.js";
 import {StateArchive, StateArchiveSSZType} from "../../../db/repositories/hierarchicalStateArchive.js";
 
 export async function getDiffStateArchive(
@@ -24,41 +24,22 @@ export async function getDiffStateArchive(
     hierarchicalLayers: HierarchicalLayers;
     codec: IStateDiffCodec;
   }
-): Promise<{stateArchive: StateArchive | null; diffSlots: Slot[]}> {
+): Promise<{stateArchive: StateArchive | null; layers: Layers}> {
   const epoch = computeEpochAtSlot(slot);
   const {snapshotSlot, diffSlots} = hierarchicalLayers.getArchiveLayers(slot);
-  let expectedSnapshotSlot = snapshotSlot;
+  const expectedSnapshotSlot = snapshotSlot;
 
-  if (diffSlots.length < 1) {
-    logger?.error("Error detecting the diff layers", {slot, diffSlots: diffSlots.join(",")});
-    return {diffSlots, stateArchive: null};
-  }
-
-  const snapshotArchive = await getSnapshotStateArchiveWithFallback({
-    slot: expectedSnapshotSlot,
-    db,
-    fallbackTillSlot: hierarchicalLayers.getPreviousSlotForLayer(expectedSnapshotSlot - 1, 0),
-  }).then((state) => {
-    if (!state) return getLastStoredStateArchive({db, snapshot: true});
-
-    return null;
-  });
+  const snapshotArchive = await getSnapshotStateArchive(expectedSnapshotSlot, db).then(
+    (state) => state ?? searchSnapshotStateArchive(Math.max(expectedSnapshotSlot - 1, 0), 0, db)
+  );
 
   if (!snapshotArchive) {
     logger?.error("Missing the snapshot state", {snapshotSlot: expectedSnapshotSlot});
     metrics?.regenErrorCount.inc({reason: RegenErrorType.loadState});
-    return {diffSlots, stateArchive: null};
+    return {layers: {snapshotSlot, diffSlots}, stateArchive: null};
   }
 
   const availableSnapshotSlot = snapshotArchive.slot;
-
-  if (availableSnapshotSlot >= slot) {
-    logger?.debug("Found snapshot at higher or same slot", {
-      expectedSnapshotSlot,
-      availableSnapshotSlot,
-    });
-    return {diffSlots, stateArchive: null};
-  }
 
   if (availableSnapshotSlot !== expectedSnapshotSlot) {
     // Possibly because of checkpoint sync
@@ -66,7 +47,14 @@ export async function getDiffStateArchive(
       expectedSnapshotSlot,
       availableSnapshotSlot: snapshotArchive.slot,
     });
-    expectedSnapshotSlot = snapshotArchive.slot;
+  }
+
+  if (availableSnapshotSlot >= slot) {
+    logger?.debug("Found snapshot at higher or same slot", {
+      expectedSnapshotSlot,
+      availableSnapshotSlot,
+    });
+    return {layers: {diffSlots, snapshotSlot: availableSnapshotSlot}, stateArchive: snapshotArchive};
   }
 
   // Get all diffs except the first one which was a snapshot layer
@@ -111,8 +99,7 @@ export async function getDiffStateArchive(
     if (activeStateArchive.partialState.byteLength === 0 || activeStateArchive.balances.byteLength === 0) {
       throw new Error("Some error during applying diffs");
     }
-
-    return {diffSlots, stateArchive: activeStateArchive};
+    return {layers: {diffSlots, snapshotSlot: availableSnapshotSlot}, stateArchive: activeStateArchive};
   } catch (err) {
     logger?.error(
       "Can not compute the diff state",
@@ -120,6 +107,6 @@ export async function getDiffStateArchive(
       err as Error
     );
     metrics?.regenErrorCount.inc({reason: RegenErrorType.loadState});
-    return {diffSlots, stateArchive: null};
+    return {layers: {snapshotSlot: availableSnapshotSlot, diffSlots}, stateArchive: null};
   }
 }

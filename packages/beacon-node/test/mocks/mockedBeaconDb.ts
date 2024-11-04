@@ -13,6 +13,7 @@ import {
   BLSToExecutionChangeRepository,
   BlobSidecarsRepository,
   BlobSidecarsArchiveRepository,
+  HierarchicalStateArchiveRepository,
 } from "../../src/db/repositories/index.js";
 import {BeaconDb} from "../../src/db/index.js";
 
@@ -45,6 +46,7 @@ vi.mock("../../src/db/index.js", async (importActual) => {
       block: vi.mocked(new BlockRepository({} as any, {} as any)),
       blockArchive: vi.mocked(new BlockArchiveRepository({} as any, {} as any)),
       stateArchive: vi.mocked(new StateArchiveRepository({} as any, {} as any)),
+      hierarchicalStateArchiveRepository: vi.mocked(new HierarchicalStateArchiveRepository({} as any, {} as any)),
 
       voluntaryExit: vi.mocked(new VoluntaryExitRepository({} as any, {} as any)),
       blsToExecutionChange: vi.mocked(new BLSToExecutionChangeRepository({} as any, {} as any)),
