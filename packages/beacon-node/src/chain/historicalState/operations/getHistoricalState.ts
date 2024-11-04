@@ -46,7 +46,10 @@ export async function getHistoricalState(
       }
 
       case HistoricalStateStorageType.BlockReplay: {
-        const {stateArchive, diffSlots} = await getDiffStateArchive(slot, modules);
+        const {
+          stateArchive,
+          layers: {diffSlots},
+        } = await getDiffStateArchive(slot, modules);
 
         if (!stateArchive) return null;
 
