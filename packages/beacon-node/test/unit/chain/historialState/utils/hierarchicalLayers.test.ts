@@ -3,28 +3,24 @@ import {HierarchicalLayers, Layers} from "../../../../../src/chain/historicalSta
 import {computeStartSlotAtEpoch} from "@lodestar/state-transition";
 
 describe("HierarchicalLayers", () => {
-  const layersEpochs = "1,3,5,7";
-  let hierarchicalLayers: HierarchicalLayers;
-
-  beforeEach(() => {
-    hierarchicalLayers = HierarchicalLayers.fromString(layersEpochs);
-  });
-
   describe("toString", () => {
     it("should be same as initialized string", () => {
+      const hierarchicalLayers = HierarchicalLayers.fromString("1,3,5,7");
       expect(hierarchicalLayers.toString()).toEqual("1,3,5,7");
     });
   });
 
   describe("totalLayers", () => {
     it("should return valid number of layers", () => {
+      const hierarchicalLayers = HierarchicalLayers.fromString("1,3,5,7");
+
       expect(hierarchicalLayers.totalLayers).toEqual(4);
     });
   });
 
   describe("getArchiveLayers", () => {
-    // Considering that there are 8 slots per epoch
-    const testCases: {title: string; slot: number; output: Layers}[] = [
+    // Considering that there are 8 slots per epoch and we are using 1,3,5,7 epoch as layers
+    const overlappingEpochs: {title: string; slot: number; output: Layers}[] = [
       {title: "genesis slot", slot: 0, output: {snapshotSlot: 0, diffSlots: []}},
       {title: "slot after genesis slot", slot: 5, output: {snapshotSlot: 0, diffSlots: []}},
       {
@@ -106,7 +102,66 @@ describe("HierarchicalLayers", () => {
       },
     ];
 
-    it.each(testCases)("$title", ({slot, output}) => {
+    it.each(overlappingEpochs)("$title", ({slot, output}) => {
+      const hierarchicalLayers = HierarchicalLayers.fromString("1,3,5,7");
+
+      expect(hierarchicalLayers.getArchiveLayers(slot)).toEqual(output);
+    });
+
+    // Considering that there are 8 slots per epoch and we are using 3,5,7 epoch as layers
+    const nonOverlappingEpochs: {title: string; slot: number; output: Layers}[] = [
+      {title: "genesis slot", slot: 0, output: {snapshotSlot: 0, diffSlots: []}},
+      {title: "slot after genesis slot", slot: 5, output: {snapshotSlot: 0, diffSlots: []}},
+      {
+        title: "one slot before first diff layer",
+        slot: computeStartSlotAtEpoch(3) - 1,
+        output: {snapshotSlot: 0, diffSlots: []},
+      },
+      {
+        title: "at slot of first diff layer",
+        slot: computeStartSlotAtEpoch(3),
+        output: {snapshotSlot: 0, diffSlots: [computeStartSlotAtEpoch(3)]},
+      },
+      {
+        title: "after slot of first diff layer",
+        slot: computeStartSlotAtEpoch(3) + 1,
+        output: {snapshotSlot: 0, diffSlots: [computeStartSlotAtEpoch(3)]},
+      },
+      {
+        title: "one slot before second diff layer",
+        slot: computeStartSlotAtEpoch(5) - 1,
+        output: {snapshotSlot: 0, diffSlots: [computeStartSlotAtEpoch(3)]},
+      },
+      {
+        title: "at slot of second diff layer",
+        slot: computeStartSlotAtEpoch(5),
+        output: {snapshotSlot: 0, diffSlots: [computeStartSlotAtEpoch(5)]},
+      },
+      {
+        title: "after slot of second diff layer",
+        slot: computeStartSlotAtEpoch(5) + 1,
+        output: {snapshotSlot: 0, diffSlots: [computeStartSlotAtEpoch(5)]},
+      },
+      {
+        title: "one slot before first snapshot",
+        slot: computeStartSlotAtEpoch(7) - 1,
+        output: {snapshotSlot: 0, diffSlots: [computeStartSlotAtEpoch(5), computeStartSlotAtEpoch(6)]},
+      },
+      {
+        title: "at slot of second diff layer",
+        slot: computeStartSlotAtEpoch(7),
+        output: {snapshotSlot: computeStartSlotAtEpoch(7), diffSlots: []},
+      },
+      {
+        title: "after slot of second diff layer",
+        slot: computeStartSlotAtEpoch(7) + 1,
+        output: {snapshotSlot: computeStartSlotAtEpoch(7), diffSlots: []},
+      },
+    ];
+
+    it.each(nonOverlappingEpochs)("$title", ({slot, output}) => {
+      const hierarchicalLayers = HierarchicalLayers.fromString("3,5,7");
+
       expect(hierarchicalLayers.getArchiveLayers(slot)).toEqual(output);
     });
   });
