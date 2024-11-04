@@ -57,22 +57,30 @@ export async function getDiffStateArchive(
     return {layers: {diffSlots, snapshotSlot: availableSnapshotSlot}, stateArchive: snapshotArchive};
   }
 
+  // In cases when snapshot is taken during the checkpoint sync and is at higher slot than expected
+  const applicableDiffs = diffSlots.filter((s) => s > availableSnapshotSlot);
+
   // Get all diffs except the first one which was a snapshot layer
-  const diffArchives = await Promise.all(
-    diffSlots.map((s) => measure(metrics?.loadDiffStateTime, () => db.hierarchicalStateArchiveRepository.get(s)))
-  );
+  const diffArchives = (
+    await Promise.all(
+      applicableDiffs.map((s) =>
+        measure(metrics?.loadDiffStateTime, () => db.hierarchicalStateArchiveRepository.get(s))
+      )
+    )
+  ).filter(Boolean) as StateArchive[];
 
-  const nonEmptyDiffs = diffArchives.filter(Boolean) as StateArchive[];
-
-  if (nonEmptyDiffs.length < diffSlots.length) {
-    logger?.warn("Missing some diff states", {
+  // If we apply some diff with missing one, it will not fail rather result in wrong state computation
+  if (diffArchives.length > 0 && diffArchives.length < applicableDiffs.length) {
+    logger?.error("Missing some diff states", {
       epoch,
       slot,
       snapshotSlot: expectedSnapshotSlot,
       diffPath: diffSlots.join(","),
-      availableDiffs: nonEmptyDiffs.map((d) => d.slot).join(","),
+      availableDiffs: diffArchives.map((d) => d.slot).join(","),
     });
     metrics?.regenErrorCount.inc({reason: RegenErrorType.loadState});
+
+    return {layers: {snapshotSlot: availableSnapshotSlot, diffSlots}, stateArchive: null};
   }
 
   try {
@@ -81,12 +89,12 @@ export async function getDiffStateArchive(
       slot,
       snapshotSlot: expectedSnapshotSlot,
       diffPath: diffSlots.join(","),
-      availableDiffs: nonEmptyDiffs.map((d) => d.slot).join(","),
+      availableDiffs: diffArchives.map((d) => d.slot).join(","),
     });
 
     let activeStateArchive = snapshotArchive;
 
-    for (const intermediateStateArchive of nonEmptyDiffs) {
+    for (const intermediateStateArchive of diffArchives) {
       logger?.verbose("Applying state diff", {
         activeSlot: intermediateStateArchive.slot,
         activeStateSize: formatBytes(StateArchiveSSZType.serialize(activeStateArchive).byteLength),

@@ -168,6 +168,54 @@ describe("historicalState/util", () => {
       });
       expect(codec.apply).not.toBeCalled();
     });
+
+    it("should fail if any intermediate diff is missing", async () => {
+      const slot = computeStartSlotAtEpoch(70) + 1;
+      const layers = hierarchicalLayers.getArchiveLayers(slot);
+      const archives = generateStateArchives(layers);
+
+      expect(layers.diffSlots.length).greaterThan(1);
+
+      when(db.hierarchicalStateArchiveRepository.get)
+        .calledWith(layers.snapshotSlot)
+        .thenResolve(archives.states[layers.snapshotSlot]);
+
+      for (const diffSlot of layers.diffSlots) {
+        when(db.hierarchicalStateArchiveRepository.get).calledWith(diffSlot).thenResolve(archives.diffs[diffSlot]);
+      }
+      when(db.hierarchicalStateArchiveRepository.get).calledWith(layers.diffSlots[0]).thenResolve(null);
+
+      await expect(getDiffStateArchive(slot, {db, logger, hierarchicalLayers, codec})).resolves.toEqual({
+        stateArchive: null,
+        layers,
+      });
+      expect(codec.apply).not.toBeCalled();
+    });
+
+    it("should fail if some final diff is missing", async () => {
+      const slot = computeStartSlotAtEpoch(70) + 1;
+      const layers = hierarchicalLayers.getArchiveLayers(slot);
+      const archives = generateStateArchives(layers);
+
+      expect(layers.diffSlots).not.toHaveLength(0);
+
+      when(db.hierarchicalStateArchiveRepository.get)
+        .calledWith(layers.snapshotSlot)
+        .thenResolve(archives.states[layers.snapshotSlot]);
+
+      for (const diffSlot of layers.diffSlots) {
+        when(db.hierarchicalStateArchiveRepository.get).calledWith(diffSlot).thenResolve(archives.diffs[diffSlot]);
+      }
+      when(db.hierarchicalStateArchiveRepository.get)
+        .calledWith(layers.diffSlots[layers.diffSlots.length - 1])
+        .thenResolve(null);
+
+      await expect(getDiffStateArchive(slot, {db, logger, hierarchicalLayers, codec})).resolves.toEqual({
+        stateArchive: null,
+        layers,
+      });
+      expect(codec.apply).not.toBeCalled();
+    });
   });
 });
 
