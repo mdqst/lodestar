@@ -65,7 +65,9 @@ describe("SinlgeAttestation SSZ serialized picking", () => {
 
       if (isElectra) {
         expect(getSlotFromSingleAttestationSerialized(bytes)).toEqual(attestation.data.slot);
-        expect(getCommitteeIndexFromSingleAttestationSerialized(bytes)).toEqual(attestation.committeeIndex);
+        expect(getCommitteeIndexFromSingleAttestationSerialized(ForkName.electra, bytes)).toEqual(
+          attestation.committeeIndex
+        );
         expect(getBlockRootFromSingleAttestationSerialized(bytes)).toEqual(toRootHex(attestation.data.beaconBlockRoot));
         // base64, not hex
         expect(getAttDataFromSingleAttestationSerialized(bytes)).toEqual(
@@ -74,6 +76,9 @@ describe("SinlgeAttestation SSZ serialized picking", () => {
         expect(getSignatureFromSingleAttestationSerialized(bytes)).toEqual(attestation.signature);
       } else {
         expect(getSlotFromAttestationSerialized(bytes)).toBe(attestation.data.slot);
+        expect(getCommitteeIndexFromSingleAttestationSerialized(ForkName.phase0, bytes)).toEqual(
+          attestation.data.index
+        );
         expect(getBlockRootFromAttestationSerialized(bytes)).toBe(toRootHex(attestation.data.beaconBlockRoot));
         expect(getAggregationBitsFromAttestationSerialized(bytes)?.toBoolArray()).toEqual(
           attestation.aggregationBits.toBoolArray()
@@ -134,7 +139,7 @@ describe("SinlgeAttestation SSZ serialized picking", () => {
   it("getCommitteeIndexFromSingleAttestationSerialized - invalid data", () => {
     const invalidCommitteeIndexDataSizes = [0, 4, 11];
     for (const size of invalidCommitteeIndexDataSizes) {
-      expect(getCommitteeIndexFromSingleAttestationSerialized(Buffer.alloc(size))).toBeNull();
+      expect(getCommitteeIndexFromSingleAttestationSerialized(ForkName.electra, Buffer.alloc(size))).toBeNull();
     }
   });
 
