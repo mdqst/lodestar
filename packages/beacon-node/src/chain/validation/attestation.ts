@@ -35,7 +35,7 @@ import {
   phase0,
   ssz,
 } from "@lodestar/types";
-import {toRootHex} from "@lodestar/utils";
+import {assert, toRootHex} from "@lodestar/utils";
 import {MAXIMUM_GOSSIP_CLOCK_DISPARITY_SEC} from "../../constants/index.js";
 import {sszDeserializeAttestation} from "../../network/gossip/topic.js";
 import {sszDeserializeSingleAttestation} from "../../network/gossip/topic.js";
@@ -359,7 +359,7 @@ async function validateAttestationNoSignatureCheck(
   }
 
   let committeeValidatorIndices: Uint32Array;
-  let numCommittees; // Only populate when we compute shuffling
+  let numCommittees: number | null = null; // Only populate when we compute shuffling
   let getSigningRoot: () => Uint8Array;
   let expectedSubnet: number;
   if (attestationOrCache.cache) {
@@ -411,22 +411,25 @@ async function validateAttestationNoSignatureCheck(
     numCommittees = shuffling.committeesPerSlot;
   }
 
-  const validatorIndex = isForkPostElectra(fork)
-    ? (attestationOrCache.attestation as SingleAttestation<ForkPostElectra>).attesterIndex
-    : committeeValidatorIndices[aggregationBits!.getSingleTrueBit()!];
+  let validatorIndex: number;
 
   if (!isForkPostElectra(fork)) {
+    // The validity of aggregation bits are already checked above
+    assert.notNull(aggregationBits);
+    const bitIndex = aggregationBits.getSingleTrueBit();
+    assert.notNull(bitIndex);
+
+    validatorIndex = committeeValidatorIndices[bitIndex];
     // [REJECT] The number of aggregation bits matches the committee size
     // -- i.e. len(attestation.aggregation_bits) == len(get_beacon_committee(state, data.slot, data.index)).
     // > TODO: Is this necessary? Lighthouse does not do this check.
-    if (aggregationBits !== null) {
-      if (aggregationBits.bitLen !== committeeValidatorIndices.length) {
-        throw new AttestationError(GossipAction.REJECT, {
-          code: AttestationErrorCode.WRONG_NUMBER_OF_AGGREGATION_BITS,
-        });
-      }
+    if (aggregationBits.bitLen !== committeeValidatorIndices.length) {
+      throw new AttestationError(GossipAction.REJECT, {
+        code: AttestationErrorCode.WRONG_NUMBER_OF_AGGREGATION_BITS,
+      });
     }
   } else {
+    validatorIndex = (attestationOrCache.attestation as SingleAttestation<ForkPostElectra>).attesterIndex;
     // [REJECT] The attester is a member of the committee -- i.e.
     // `attestation.attester_index in get_beacon_committee(state, attestation.data.slot, index)`.
     // If `aggregationBitsElectra` exists, that means we have already cached it. No need to check again
@@ -442,7 +445,7 @@ async function validateAttestationNoSignatureCheck(
       aggregationBits = BitArray.fromSingleBit(committeeValidatorIndices.length, committeeValidatorIndex);
     }
     // If committeeBits is null, it means it is not cached and thus numCommittees must be computed
-    if (committeeBits === null && numCommittees !== undefined) {
+    if (committeeBits === null && numCommittees !== null) {
       committeeBits = BitArray.fromSingleBit(numCommittees, committeeIndex);
     }
   }

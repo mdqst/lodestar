@@ -227,7 +227,7 @@ function aggregateAttestationInto(
   attestation: SingleAttestation,
   aggregationBits: BitArray | null
 ): InsertOutcome {
-  let bitIndex;
+  let bitIndex: number | null;
 
   if (isElectraSingleAttestation(attestation)) {
     assert.notNull(aggregationBits, "aggregationBits missing post-electra");
