@@ -37,7 +37,6 @@ import {
 } from "@lodestar/types";
 import {assert, toRootHex} from "@lodestar/utils";
 import {MAXIMUM_GOSSIP_CLOCK_DISPARITY_SEC} from "../../constants/index.js";
-import {sszDeserializeAttestation} from "../../network/gossip/topic.js";
 import {sszDeserializeSingleAttestation} from "../../network/gossip/topic.js";
 import {getShufflingDependentRoot} from "../../util/dependentRoot.js";
 import {
@@ -71,7 +70,6 @@ export type AttestationValidationResult = {
   attDataRootHex: RootHex;
   committeeIndex: CommitteeIndex;
   aggregationBits: BitArray | null; // Field populated post-electra only
-  committeeBits: BitArray | null; // Field populated post-electra only
 };
 
 export type AttestationOrBytes = ApiAttestation | GossipAttestation;
@@ -327,7 +325,6 @@ async function validateAttestationNoSignatureCheck(
   }
 
   let aggregationBits: BitArray | null = null;
-  let committeeBits: BitArray | null = null;
   if (!isForkPostElectra(fork)) {
     // [REJECT] The attestation is unaggregated -- that is, it has exactly one participating validator
     // (len([bit for bit in attestation.aggregation_bits if bit]) == 1, i.e. exactly 1 bit is set).
@@ -352,14 +349,9 @@ async function validateAttestationNoSignatureCheck(
     if (attestationOrCache.cache && attestationOrCache.cache.aggregationBits !== null) {
       aggregationBits = attestationOrCache.cache.aggregationBits;
     }
-    // Populate aggregationBits if cached post-electra, else we populate later
-    if (attestationOrCache.cache && attestationOrCache.cache.committeeBits !== null) {
-      committeeBits = attestationOrCache.cache.committeeBits;
-    }
   }
 
   let committeeValidatorIndices: Uint32Array;
-  let numCommittees: number | null = null; // Only populate when we compute shuffling
   let getSigningRoot: () => Uint8Array;
   let expectedSubnet: number;
   if (attestationOrCache.cache) {
@@ -408,7 +400,6 @@ async function validateAttestationNoSignatureCheck(
     committeeValidatorIndices = getCommitteeIndices(shuffling, attSlot, committeeIndex);
     getSigningRoot = () => getAttestationDataSigningRoot(chain.config, attData);
     expectedSubnet = computeSubnetForSlot(shuffling, attSlot, committeeIndex);
-    numCommittees = shuffling.committeesPerSlot;
   }
 
   let validatorIndex: number;
@@ -443,10 +434,6 @@ async function validateAttestationNoSignatureCheck(
       }
 
       aggregationBits = BitArray.fromSingleBit(committeeValidatorIndices.length, committeeValidatorIndex);
-    }
-    // If committeeBits is null, it means it is not cached and thus numCommittees must be computed
-    if (committeeBits === null && numCommittees !== null) {
-      committeeBits = BitArray.fromSingleBit(numCommittees, committeeIndex);
     }
   }
 
@@ -518,7 +505,6 @@ async function validateAttestationNoSignatureCheck(
         attDataRootHex,
         attestationData: attData,
         aggregationBits: isForkPostElectra(fork) ? aggregationBits : null,
-        committeeBits: isForkPostElectra(fork) ? committeeBits : null,
       });
     }
   }
@@ -555,7 +541,6 @@ async function validateAttestationNoSignatureCheck(
     validatorIndex,
     committeeIndex,
     aggregationBits: isForkPostElectra(fork) ? aggregationBits : null,
-    committeeBits: isForkPostElectra(fork) ? committeeBits : null,
   };
 }
 

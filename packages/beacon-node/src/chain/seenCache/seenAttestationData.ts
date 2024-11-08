@@ -26,8 +26,6 @@ export type AttestationDataCacheEntry = {
   subnet: number;
   // aggregationBits only populates post-electra. Pre-electra can use get it directly from attestationOrBytes
   aggregationBits: BitArray | null;
-  // committeeBits only populates post-electra. Pre-electra does not require it
-  committeeBits: BitArray | null;
 };
 
 export enum RejectReason {

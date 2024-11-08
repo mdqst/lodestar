@@ -1,7 +1,7 @@
 import {Signature, aggregateSignatures} from "@chainsafe/blst";
 import {BitArray} from "@chainsafe/ssz";
 import {ChainForkConfig} from "@lodestar/config";
-import {isForkPostElectra} from "@lodestar/params";
+import {MAX_COMMITTEES_PER_SLOT, isForkPostElectra} from "@lodestar/params";
 import {Attestation, RootHex, SingleAttestation, Slot, isElectraSingleAttestation} from "@lodestar/types";
 import {assert, MapDef} from "@lodestar/utils";
 import {IClock} from "../../util/clock.js";
@@ -109,8 +109,7 @@ export class AttestationPool {
     committeeIndex: CommitteeIndex,
     attestation: SingleAttestation,
     attDataRootHex: RootHex,
-    aggregationBits: BitArray | null,
-    committeeBits: BitArray | null
+    aggregationBits: BitArray | null
   ): InsertOutcome {
     const slot = attestation.data.slot;
     const fork = this.config.getForkName(slot);
@@ -153,7 +152,7 @@ export class AttestationPool {
       return aggregateAttestationInto(aggregate, attestation, aggregationBits);
     }
     // Create new aggregate
-    aggregateByIndex.set(committeeIndex, attestationToAggregate(attestation, aggregationBits, committeeBits));
+    aggregateByIndex.set(committeeIndex, attestationToAggregate(attestation, aggregationBits));
     return InsertOutcome.NewData;
   }
 
@@ -251,18 +250,13 @@ function aggregateAttestationInto(
 /**
  * Format `contribution` into an efficient `aggregate` to add more contributions in with aggregateContributionInto()
  */
-function attestationToAggregate(
-  attestation: SingleAttestation,
-  aggregationBits: BitArray | null,
-  committeeBits: BitArray | null
-): AggregateFast {
+function attestationToAggregate(attestation: SingleAttestation, aggregationBits: BitArray | null): AggregateFast {
   if (isElectraSingleAttestation(attestation)) {
     assert.notNull(aggregationBits, "aggregationBits missing post-electra to generate aggregate");
-    assert.notNull(committeeBits, "committeeBits missing post-electra to generate aggregate");
     return {
       data: attestation.data,
       aggregationBits,
-      committeeBits,
+      committeeBits: BitArray.fromSingleBit(MAX_COMMITTEES_PER_SLOT, attestation.committeeIndex),
       signature: signatureFromBytesNoCheck(attestation.signature),
     };
   }
